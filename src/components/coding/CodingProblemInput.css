@@ -1,0 +1,108 @@
+.coding-problem-input-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 150px);
+  padding: 24px;
+}
+
+.coding-problem-input-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+}
+
+.coding-problem-input-card h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: var(--color-primary);
+}
+
+.coding-problem-input-card p {
+  color: var(--color-muted);
+  margin-bottom: 24px;
+}
+
+.problem-input-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 1rem;
+  resize: vertical;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-muted);
+}
+
+.form-divider {
+  text-align: center;
+  position: relative;
+  color: var(--color-muted);
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 45%;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.form-divider::before { left: 0; }
+.form-divider::after { right: 0; }
+
+.btn-generate {
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-generate:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.btn-generate:disabled {
+  background: var(--color-surface-3);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}

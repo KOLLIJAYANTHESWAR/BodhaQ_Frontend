@@ -155,8 +155,8 @@ function ChatMessage({ message }) {
       {/* Avatar */}
       <div
         className={`chat-avatar ${isUser
-            ? 'user-avatar'
-            : 'assistant-avatar'
+          ? 'user-avatar'
+          : 'assistant-avatar'
           }`}
         aria-hidden="true"
       >

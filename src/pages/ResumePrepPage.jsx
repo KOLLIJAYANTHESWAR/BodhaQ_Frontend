@@ -103,7 +103,7 @@ export default function ResumePrepPage() {
   // -------------------------------------------------------------------------
 
   const handleFileUpload = async (file) => {
-    if (!file) {
+    if (!file || uploading) {
       return;
     }
 
@@ -111,6 +111,8 @@ export default function ResumePrepPage() {
       '.pdf',
       '.docx',
     ];
+
+    const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
     const extension =
       '.' +
@@ -131,6 +133,19 @@ export default function ResumePrepPage() {
       return;
     }
 
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError(
+        'This resume is larger than 50 MB. Please choose a smaller file.'
+      );
+
+      setErrorCode(
+        'FILE_TOO_LARGE'
+      );
+
+      return;
+    }
+
+    setDragOver(false);
     setUploading(true);
     setError('');
     setErrorCode('');
@@ -204,7 +219,7 @@ export default function ResumePrepPage() {
   const onFileInputChange = (event) => {
     const file = event.target.files?.[0];
 
-    if (file) {
+    if (file && !uploading) {
       handleFileUpload(file);
     }
   };
@@ -218,6 +233,10 @@ export default function ResumePrepPage() {
     event.preventDefault();
 
     setDragOver(false);
+
+    if (uploading) {
+      return;
+    }
 
     const file = event.dataTransfer.files?.[0];
 
@@ -260,7 +279,7 @@ export default function ResumePrepPage() {
       ];
       oldItems.forEach(item => clearResumeQuizProgress(item.id));
     }
-    
+
     clearActiveResume();
     setProgressData(null);
   };
@@ -457,6 +476,7 @@ export default function ResumePrepPage() {
                 >
 
                   <Button
+                    type="button"
                     variant="primary"
                     onClick={() => {
                       clearError();
@@ -468,6 +488,7 @@ export default function ResumePrepPage() {
 
 
                   <Button
+                    type="button"
                     variant="secondary"
                     onClick={() => navigate('/settings')}
                   >
@@ -544,7 +565,10 @@ export default function ResumePrepPage() {
               }`}
             onDragOver={(event) => {
               event.preventDefault();
-              setDragOver(true);
+
+              if (!uploading) {
+                setDragOver(true);
+              }
             }}
             onDragLeave={() => {
               setDragOver(false);
@@ -556,15 +580,20 @@ export default function ResumePrepPage() {
               }
             }}
             role="button"
-            tabIndex={0}
+            tabIndex={uploading ? -1 : 0}
+            aria-disabled={uploading}
             aria-label="Upload resume file"
             onKeyDown={(event) => {
               if (
-                event.key === 'Enter' ||
-                event.key === ' '
+                uploading ||
+                (event.key !== 'Enter' &&
+                  event.key !== ' ')
               ) {
-                fileInputRef.current?.click();
+                return;
               }
+
+              event.preventDefault();
+              fileInputRef.current?.click();
             }}
             style={{
               padding: '36px 24px',
@@ -729,8 +758,8 @@ export default function ResumePrepPage() {
                       <li
                         key={step}
                         className={`loading-step ${index === uploadStep
-                            ? 'active'
-                            : ''
+                          ? 'active'
+                          : ''
                           }`}
                       >
                         <span aria-hidden="true">
@@ -861,10 +890,19 @@ export default function ResumePrepPage() {
   // Active Resume Dashboard
   // =========================================================================
 
-  const skills = progressData.skills || [];
-  const projects = progressData.projects || [];
-  const certifications =
-    progressData.certifications || [];
+  const skills = Array.isArray(progressData.skills)
+    ? progressData.skills
+    : [];
+
+  const projects = Array.isArray(progressData.projects)
+    ? progressData.projects
+    : [];
+
+  const certifications = Array.isArray(
+    progressData.certifications
+  )
+    ? progressData.certifications
+    : [];
 
 
   const completedSkills =
@@ -1252,8 +1290,8 @@ export default function ResumePrepPage() {
                   <li
                     key={step}
                     className={`loading-step ${index === uploadStep
-                        ? 'active'
-                        : ''
+                      ? 'active'
+                      : ''
                       }`}
                   >
                     <span aria-hidden="true">
@@ -1543,8 +1581,8 @@ export default function ResumePrepPage() {
           <button
             type="button"
             className={`resume-tab-btn ${activeTab === 'skills'
-                ? 'active'
-                : ''
+              ? 'active'
+              : ''
               }`}
             onClick={() =>
               setActiveTab('skills')
@@ -1561,14 +1599,14 @@ export default function ResumePrepPage() {
           <button
             type="button"
             className={`resume-tab-btn ${activeTab === 'projects'
-                ? 'active'
-                : ''
+              ? 'active'
+              : ''
               }`}
             onClick={() =>
               setActiveTab('projects')
             }
           >
-            🚀 Projects
+            🌟 Projects
 
             <span className="resume-tab-count">
               {completedProjects}/{projects.length}
@@ -1579,9 +1617,9 @@ export default function ResumePrepPage() {
           <button
             type="button"
             className={`resume-tab-btn ${activeTab ===
-                'certifications'
-                ? 'active'
-                : ''
+              'certifications'
+              ? 'active'
+              : ''
               }`}
             onClick={() =>
               setActiveTab('certifications')
@@ -1603,8 +1641,8 @@ export default function ResumePrepPage() {
           <button
             type="button"
             className={`pill-btn ${filterStatus === 'all'
-                ? 'active'
-                : ''
+              ? 'active'
+              : ''
               }`}
             onClick={() =>
               setFilterStatus('all')
@@ -1617,8 +1655,8 @@ export default function ResumePrepPage() {
           <button
             type="button"
             className={`pill-btn ${filterStatus === 'todo'
-                ? 'active'
-                : ''
+              ? 'active'
+              : ''
               }`}
             onClick={() =>
               setFilterStatus('todo')
@@ -1639,8 +1677,8 @@ export default function ResumePrepPage() {
           <button
             type="button"
             className={`pill-btn ${filterStatus === 'completed'
-                ? 'active'
-                : ''
+              ? 'active'
+              : ''
               }`}
             onClick={() =>
               setFilterStatus('completed')

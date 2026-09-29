@@ -43,8 +43,10 @@ const QUESTION_COUNTS = [5, 10, 20, 30, 40, 50];
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const m = Math.floor(safeSeconds / 60);
+  const s = safeSeconds % 60;
+
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
@@ -78,7 +80,7 @@ function SourceToggle({ value, onChange, disabled = false }) {
 
 // ── Learning Gaps Callout ─────────────────────────────────────────────────────
 
-function LearningGapsCallout({ quizId, sourceType, sourceId, filename, weakCount }) {
+function LearningGapsCallout({ quizId, weakCount }) {
   const navigate = useNavigate();
 
   if (!quizId || weakCount === 0) return null;
@@ -190,7 +192,7 @@ function QuizConfig({
     isResumeAssessment
       ? 'resume_item'
       : hasPreFill
-        ? (initialSourceType || 'topic')
+        ? initialSourceType || 'topic'
         : 'topic'
   );
 
@@ -205,7 +207,7 @@ function QuizConfig({
 
   const [selectedDocName, setSelectedDocName] = useState(
     hasPreFill && initialSourceType === 'document'
-      ? (initialFilename || '')
+      ? initialFilename || ''
       : ''
   );
 
@@ -220,7 +222,6 @@ function QuizConfig({
   const [timerSeconds, setTimerSeconds] = useState(null);
 
   useEffect(() => {
-    // Resume assessments do not need the normal document list.
     if (isResumeAssessment) {
       return;
     }
@@ -232,7 +233,11 @@ function QuizConfig({
     listDocuments()
       .then((data) => {
         if (!cancelled) {
-          setDocuments(data.documents || []);
+          setDocuments(
+            Array.isArray(data?.documents)
+              ? data.documents
+              : []
+          );
         }
       })
       .catch(() => {
@@ -267,11 +272,11 @@ function QuizConfig({
     setSelectedDocId(id);
 
     const doc = documents.find(
-      (d) => d.document_id === id
+      (d) => d?.document_id === id
     );
 
     setSelectedDocName(
-      doc ? doc.filename : ''
+      doc?.filename || ''
     );
   }
 
@@ -473,8 +478,7 @@ function QuizConfig({
                 <button
                   key={n}
                   type="button"
-                  className={`pill-btn${count === n ? ' active' : ''
-                    }`}
+                  className={`pill-btn${count === n ? ' active' : ''}`}
                   onClick={() => setCount(n)}
                   aria-pressed={count === n}
                 >
@@ -506,8 +510,7 @@ function QuizConfig({
                 <button
                   key={d}
                   type="button"
-                  className={`pill-btn${difficulty === d ? ' active' : ''
-                    }`}
+                  className={`pill-btn${difficulty === d ? ' active' : ''}`}
                   onClick={() => setDifficulty(d)}
                   aria-pressed={difficulty === d}
                 >
@@ -541,9 +544,6 @@ function QuizConfig({
         priorWeakCount > 0 && (
           <LearningGapsCallout
             quizId={priorQuizId}
-            sourceType={initialSourceType}
-            sourceId={initialSourceId}
-            filename={initialFilename}
             weakCount={priorWeakCount}
           />
         )}
@@ -579,8 +579,7 @@ function QuizTimer({ secondsLeft }) {
 
   return (
     <div
-      className={`quiz-timer${isUrgent ? ' quiz-timer--urgent' : ''
-        }`}
+      className={`quiz-timer${isUrgent ? ' quiz-timer--urgent' : ''}`}
       role="timer"
       aria-live="polite"
       aria-label={`Time remaining: ${formatTime(secondsLeft)}`}
@@ -630,6 +629,10 @@ function QuizQuestion({
   onExit,
   isResumeItem,
 }) {
+  const options = Array.isArray(question?.options)
+    ? question.options
+    : [];
+
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -670,7 +673,7 @@ function QuizQuestion({
 
         <ProgressBar
           value={index + 1}
-          max={total}
+          max={Math.max(total, 1)}
         />
       </div>
 
@@ -700,13 +703,14 @@ function QuizQuestion({
           <div
             className="radio-group"
             role="radiogroup"
+            aria-label={`Answer choices for question ${index + 1}`}
           >
-            {question.options.map((option) => (
+            {options.map((option) => (
               <label
                 key={option.letter}
                 className={`radio-option ${selected === option.letter
-                    ? 'selected'
-                    : ''
+                  ? 'selected'
+                  : ''
                   }`}
                 htmlFor={`q${question.id}-${option.letter}`}
               >
@@ -764,9 +768,7 @@ function QuizQuestion({
             variant="primary"
             size="lg"
             onClick={onNext}
-            disabled={
-              !selected || submitting
-            }
+            disabled={!selected || submitting}
             loading={submitting}
           >
             {isResumeItem
@@ -820,33 +822,17 @@ export default function QuizzesPage() {
     stateSource.filename ||
     '';
 
-  // Prior quiz context — used to display
-  // 'Practice Weak Topics' callout.
   const priorQuizId =
     stateSource.quizId ||
     searchParams.get('quiz_id') ||
     '';
 
   const priorWeakCount =
-    stateSource.weakCount || 0;
+    Number(stateSource.weakCount) || 0;
 
   const resumeItem =
     stateSource.resumeItem || null;
 
-  /*
-   * IMPORTANT:
-   *
-   * Resume Prep must NOT automatically generate a quiz.
-   *
-   * It should first open the same QuizConfig used by
-   * normal quizzes so the user can choose:
-   *
-   * - number of questions
-   * - difficulty
-   * - timer
-   *
-   * The resume item itself is already known and remains fixed.
-   */
   const [phase, setPhase] = useState('config');
 
   const [loadingStep, setLoadingStep] =
@@ -877,13 +863,10 @@ export default function QuizzesPage() {
         initialFilename,
     });
 
-  // Timer state
   const [secondsLeft, setSecondsLeft] =
     useState(null);
 
   const timerRef = useRef(null);
-
-  // Stable submit ref to avoid stale closure in timer callback.
   const submitRef = useRef(null);
 
   // Restore progress if returning to an existing resume quiz.
@@ -892,21 +875,24 @@ export default function QuizzesPage() {
       resumeItem &&
       phase === 'quiz'
     ) {
-      const saved = getResumeQuizProgress(resumeItem.id);
+      const saved =
+        getResumeQuizProgress(
+          resumeItem.id
+        );
 
-      if (saved) {
-        if (
-          saved.quizId ===
-          quiz?.quiz_id
-        ) {
-          setAnswers(
-            saved.answers || {}
-          );
+      if (
+        saved &&
+        saved.quizId === quiz?.quiz_id
+      ) {
+        setAnswers(
+          saved.answers || {}
+        );
 
-          setCurrentIndex(
-            saved.currentIndex || 0
-          );
-        }
+        setCurrentIndex(
+          Number.isInteger(saved.currentIndex)
+            ? saved.currentIndex
+            : 0
+        );
       }
     }
   }, [
@@ -922,11 +908,14 @@ export default function QuizzesPage() {
       phase === 'quiz' &&
       quiz
     ) {
-      setResumeQuizProgress(resumeItem.id, {
-        quizId: quiz.quiz_id,
-        answers,
-        currentIndex,
-      });
+      setResumeQuizProgress(
+        resumeItem.id,
+        {
+          quizId: quiz.quiz_id,
+          answers,
+          currentIndex,
+        }
+      );
     }
   }, [
     answers,
@@ -942,15 +931,21 @@ export default function QuizzesPage() {
       currentQuiz,
       currentConfigMeta
     ) => {
-      if (submitting) return;
+      if (
+        submitting ||
+        !currentQuiz?.quiz_id
+      ) {
+        return;
+      }
 
       setSubmitting(true);
+      setError(null);
 
       try {
         const formattedAnswers = {};
 
         Object.entries(
-          currentAnswers
+          currentAnswers || {}
         ).forEach(
           ([qId, letter]) => {
             formattedAnswers[
@@ -960,7 +955,7 @@ export default function QuizzesPage() {
         );
 
         let evalResult;
-        
+
         if (resumeItem) {
           evalResult =
             await submitResumeQuiz(
@@ -968,7 +963,9 @@ export default function QuizzesPage() {
               formattedAnswers
             );
 
-          clearResumeQuizProgress(resumeItem.id);
+          clearResumeQuizProgress(
+            resumeItem.id
+          );
         } else {
           evalResult =
             await submitQuiz(
@@ -977,60 +974,118 @@ export default function QuizzesPage() {
             );
         }
 
-        // Calculate topic stats for learning gaps
         const topicStats = {};
-        if (currentQuiz.questions) {
-          currentQuiz.questions.forEach(q => {
-            const topic = q.topic || 'General';
-            if (!topicStats[topic]) topicStats[topic] = { total: 0, correct: 0 };
-            topicStats[topic].total += 1;
-            
-            const isMistake = evalResult.mistakes?.some(m => m.question_id === q.id);
-            if (!isMistake) {
-              topicStats[topic].correct += 1;
+
+        if (
+          Array.isArray(
+            currentQuiz.questions
+          )
+        ) {
+          currentQuiz.questions.forEach(
+            (q) => {
+              const topic =
+                q.topic || 'General';
+
+              if (!topicStats[topic]) {
+                topicStats[topic] = {
+                  total: 0,
+                  correct: 0,
+                };
+              }
+
+              topicStats[topic].total += 1;
+
+              const isMistake =
+                Array.isArray(
+                  evalResult?.mistakes
+                ) &&
+                evalResult.mistakes.some(
+                  (m) =>
+                    String(m?.question_id) ===
+                    String(q.id)
+                );
+
+              if (!isMistake) {
+                topicStats[topic].correct += 1;
+              }
             }
-          });
+          );
         }
 
-        // Add to history
         const historyItem = {
-          quizId: currentQuiz.quiz_id,
-          completedAt: new Date().toISOString(),
-          sourceType: resumeItem ? 'resume_item' : currentQuiz.source_type,
-          sourceId: resumeItem ? resumeItem.id : currentQuiz.source_id,
-          filename: resumeItem ? resumeItem.name : currentConfigMeta.filename,
-          score: evalResult.score,
-          totalQuestions: evalResult.total,
-          percentage: evalResult.percentage,
-          mistakes: evalResult.mistakes,
-          topicStats
+          quizId:
+            currentQuiz.quiz_id,
+          completedAt:
+            new Date().toISOString(),
+          sourceType: resumeItem
+            ? 'resume_item'
+            : currentQuiz.source_type,
+          sourceId: resumeItem
+            ? resumeItem.id
+            : currentQuiz.source_id,
+          filename: resumeItem
+            ? resumeItem.name
+            : currentConfigMeta.filename,
+          score:
+            evalResult?.score ?? 0,
+          totalQuestions:
+            evalResult?.total ?? 0,
+          percentage:
+            evalResult?.percentage ?? 0,
+          mistakes:
+            Array.isArray(
+              evalResult?.mistakes
+            )
+              ? evalResult.mistakes
+              : [],
+          topicStats,
         };
-        addQuizToHistory(historyItem);
+
+        addQuizToHistory(
+          historyItem
+        );
+
         recalculateLearningGaps();
 
         navigate(
-          `/quiz-results?quizId=${currentQuiz.quiz_id}`,
+          `/quiz-results?quizId=${encodeURIComponent(
+            currentQuiz.quiz_id
+          )}`,
           {
             state: {
               evaluation: evalResult,
-              quizId: currentQuiz.quiz_id,
-              sourceType: historyItem.sourceType,
-              sourceId: historyItem.sourceId,
-              filename: historyItem.filename,
-              isResumeItem: Boolean(resumeItem),
-              resumeItem: resumeItem || undefined,
+              quizId:
+                currentQuiz.quiz_id,
+              sourceType:
+                historyItem.sourceType,
+              sourceId:
+                historyItem.sourceId,
+              filename:
+                historyItem.filename,
+              isResumeItem:
+                Boolean(resumeItem),
+              resumeItem:
+                resumeItem ||
+                undefined,
             },
           }
         );
       } catch (err) {
-        setError(err.message);
+        setError(
+          err?.message ||
+          'Unable to submit the quiz.'
+        );
         setSubmitting(false);
       }
     },
-    [resumeItem, submitting, navigate]
+    [
+      resumeItem,
+      submitting,
+      navigate,
+    ]
   );
 
-  // Keep ref up-to-date for timer callback.
+  // Keep the latest submission data available to the timer.
   useEffect(() => {
     submitRef.current = {
       answers,
@@ -1043,57 +1098,86 @@ export default function QuizzesPage() {
     configMeta,
   ]);
 
-  // Countdown timer effect.
+  // Countdown timer.
   useEffect(() => {
     if (
       phase !== 'quiz' ||
       secondsLeft === null
     ) {
+      if (timerRef.current) {
+        clearInterval(
+          timerRef.current
+        );
+        timerRef.current = null;
+      }
+
+      return undefined;
+    }
+
+    if (timerRef.current) {
       clearInterval(
         timerRef.current
       );
-      return;
     }
 
     timerRef.current =
       setInterval(() => {
-        setSecondsLeft(
-          (prev) => {
-            if (prev <= 1) {
-              clearInterval(
-                timerRef.current
-              );
-
-              const {
-                answers: ans,
-                quiz: q,
-                configMeta: meta,
-              } =
-                submitRef.current;
-
-              if (q) {
-                doSubmit(
-                  ans,
-                  q,
-                  meta
-                );
-              }
-
-              return 0;
-            }
-
-            return prev - 1;
+        setSecondsLeft((prev) => {
+          if (
+            prev === null ||
+            prev <= 1
+          ) {
+            return 0;
           }
-        );
+
+          return prev - 1;
+        });
       }, 1000);
 
-    return () =>
-      clearInterval(
-        timerRef.current
-      );
+    return () => {
+      if (timerRef.current) {
+        clearInterval(
+          timerRef.current
+        );
+        timerRef.current = null;
+      }
+    };
   }, [
     phase,
-    secondsLeft === null,
+    secondsLeft,
+  ]);
+
+  // Submit exactly once when the timer reaches zero.
+  useEffect(() => {
+    if (
+      phase !== 'quiz' ||
+      secondsLeft !== 0
+    ) {
+      return;
+    }
+
+    if (
+      submitting ||
+      !submitRef.current?.quiz
+    ) {
+      return;
+    }
+
+    const {
+      answers: currentAnswers,
+      quiz: currentQuiz,
+      configMeta: currentConfigMeta,
+    } = submitRef.current;
+
+    doSubmit(
+      currentAnswers,
+      currentQuiz,
+      currentConfigMeta
+    );
+  }, [
+    phase,
+    secondsLeft,
+    submitting,
     doSubmit,
   ]);
 
@@ -1152,11 +1236,20 @@ export default function QuizzesPage() {
           );
       }
 
+      if (
+        !data ||
+        !Array.isArray(data.questions) ||
+        data.questions.length === 0
+      ) {
+        throw new Error(
+          'The quiz could not be generated. Please try again.'
+        );
+      }
+
       setQuiz(data);
       setAnswers({});
       setCurrentIndex(0);
 
-      // Set up timer.
       setSecondsLeft(
         timerSeconds !== undefined
           ? timerSeconds
@@ -1165,11 +1258,11 @@ export default function QuizzesPage() {
 
       setPhase('quiz');
     } catch (err) {
-      setError(err.message);
+      setError(
+        err?.message ||
+        'Unable to generate the quiz.'
+      );
 
-      // Return to configuration so
-      // the user can adjust settings
-      // and retry.
       setPhase('config');
     } finally {
       clearInterval(
@@ -1181,6 +1274,13 @@ export default function QuizzesPage() {
   }
 
   async function handleNext() {
+    if (
+      !quiz ||
+      !Array.isArray(quiz.questions)
+    ) {
+      return;
+    }
+
     const questions =
       quiz.questions;
 
@@ -1191,13 +1291,23 @@ export default function QuizzesPage() {
       setCurrentIndex(
         (i) => i + 1
       );
-
       return;
     }
 
-    clearInterval(
-      timerRef.current
-    );
+    if (
+      !window.confirm(
+        'Are you sure you want to submit your quiz? You cannot change your answers after this.'
+      )
+    ) {
+      return;
+    }
+
+    if (timerRef.current) {
+      clearInterval(
+        timerRef.current
+      );
+      timerRef.current = null;
+    }
 
     await doSubmit(
       answers,
@@ -1231,7 +1341,9 @@ export default function QuizzesPage() {
   }
 
   const currentQuestion =
-    quiz?.questions?.[currentIndex];
+    quiz?.questions?.[
+    currentIndex
+    ];
 
   return (
     <div className="page-content">
@@ -1243,23 +1355,15 @@ export default function QuizzesPage() {
         }
         subtitle={
           phase === 'quiz'
-            ? (
-              resumeItem
-                ? `Assessing: ${resumeItem.name} • Grounded in your uploaded resume`
-                : quiz.source_type ===
-                  'document'
-                  ? (
-                    'Document: ' +
-                    (
-                      configMeta.filename ||
-                      'Document'
-                    )
-                  )
-                  : (
-                    'Topic: ' +
-                    quiz.source_id
-                  )
-            )
+            ? resumeItem
+              ? `Assessing: ${resumeItem.name} • Grounded in your uploaded resume`
+              : quiz?.source_type ===
+                'document'
+                ? `Document: ${configMeta.filename ||
+                'Document'
+                }`
+                : `Topic: ${quiz?.source_id || ''
+                }`
             : resumeItem
               ? `Configure your assessment for "${resumeItem.name}".`
               : 'Test your knowledge or practice a topic.'
@@ -1277,10 +1381,7 @@ export default function QuizzesPage() {
             message={error}
             onRetry={() => {
               setError(null);
-
-              if (resumeItem) {
-                setPhase('config');
-              }
+              setPhase('config');
             }}
           />
         </div>
@@ -1315,99 +1416,218 @@ export default function QuizzesPage() {
         />
       )}
 
-      {phase === 'error' &&
-        !error && (
+      {phase === 'quiz' &&
+        currentQuestion && (
           <div
             style={{
-              marginBottom: 20,
+              display: 'flex',
+              gap: '24px',
+              alignItems:
+                'flex-start',
+              flexWrap: 'wrap',
+              flexDirection:
+                'row',
             }}
           >
-            <ErrorState
-              title="Error"
-              message="Failed to load quiz"
-              onRetry={() =>
-                navigate(
-                  '/resume-prep'
-                )
-              }
-            />
+            <div
+              style={{
+                flex: '1 1 0%',
+                minWidth: '300px',
+              }}
+            >
+              <QuizQuestion
+                question={
+                  currentQuestion
+                }
+                index={
+                  currentIndex
+                }
+                total={
+                  quiz.questions.length
+                }
+                selected={
+                  answers[
+                  currentQuestion.id
+                  ] || ''
+                }
+                onSelect={(letter) =>
+                  setAnswers(
+                    (prev) => ({
+                      ...prev,
+                      [currentQuestion.id]:
+                        letter,
+                    })
+                  )
+                }
+                onNext={
+                  handleNext
+                }
+                isLast={
+                  currentIndex ===
+                  quiz.questions.length -
+                  1
+                }
+                submitting={
+                  submitting
+                }
+                secondsLeft={
+                  secondsLeft
+                }
+                onExit={() =>
+                  navigate(
+                    '/resume-prep'
+                  )
+                }
+                isResumeItem={Boolean(
+                  resumeItem
+                )}
+              />
+            </div>
+
+            <div
+              className="quiz-navigator"
+              style={{
+                flex: '0 0 280px',
+                background:
+                  'var(--color-surface)',
+                borderRadius: '12px',
+                border:
+                  '1px solid var(--color-border)',
+                padding: '20px',
+                position: 'sticky',
+                top: '80px',
+              }}
+              aria-label="Quiz question navigator"
+            >
+              <h3
+                style={{
+                  margin:
+                    '0 0 16px 0',
+                  fontSize: '1.1rem',
+                  color:
+                    'var(--color-text)',
+                }}
+              >
+                Questions List
+              </h3>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    'repeat(5, 1fr)',
+                  gap: '8px',
+                }}
+              >
+                {quiz.questions.map(
+                  (q, idx) => {
+                    const isAnswered =
+                      Boolean(
+                        answers[q.id]
+                      );
+
+                    const isCurrent =
+                      idx ===
+                      currentIndex;
+
+                    return (
+                      <button
+                        key={q.id}
+                        type="button"
+                        onClick={() =>
+                          setCurrentIndex(
+                            idx
+                          )
+                        }
+                        aria-label={`Question ${idx + 1
+                          }${isAnswered
+                            ? ', answered'
+                            : ', unanswered'
+                          }${isCurrent
+                            ? ', current'
+                            : ''
+                          }`}
+                        aria-current={
+                          isCurrent
+                            ? 'step'
+                            : undefined
+                        }
+                        style={{
+                          padding:
+                            '8px 0',
+                          border:
+                            `1px solid ${isCurrent
+                              ? 'var(--color-primary)'
+                              : isAnswered
+                                ? 'var(--color-primary-muted)'
+                                : 'var(--color-border)'
+                            }`,
+                          background:
+                            isCurrent
+                              ? 'var(--color-primary)'
+                              : isAnswered
+                                ? 'var(--color-primary-light)'
+                                : 'var(--color-surface)',
+                          color:
+                            isCurrent
+                              ? 'white'
+                              : 'var(--color-text)',
+                          fontWeight:
+                            '600',
+                          cursor:
+                            'pointer',
+                        }}
+                        title={`Question ${idx + 1
+                          }`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    '24px',
+                  paddingTop:
+                    '16px',
+                  borderTop:
+                    '1px solid var(--color-border)',
+                }}
+              >
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Are you sure you want to submit your quiz? You cannot change your answers after this.'
+                      )
+                    ) {
+                      doSubmit(
+                        answers,
+                        quiz,
+                        configMeta
+                      );
+                    }
+                  }}
+                  disabled={
+                    submitting
+                  }
+                  loading={
+                    submitting
+                  }
+                  style={{
+                    width: '100%',
+                  }}
+                >
+                  Submit Now
+                </Button>
+              </div>
+            </div>
           </div>
         )}
-
-      {phase === 'quiz' && currentQuestion && (
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 500px', minWidth: 0 }}>
-            <QuizQuestion
-              question={currentQuestion}
-              index={currentIndex}
-              total={quiz.questions.length}
-              selected={answers[currentQuestion.id] || ''}
-              onSelect={(letter) =>
-                setAnswers((prev) => ({
-                  ...prev,
-                  [currentQuestion.id]: letter,
-                }))
-              }
-              onNext={handleNext}
-              isLast={currentIndex === quiz.questions.length - 1}
-              submitting={submitting}
-              secondsLeft={secondsLeft}
-              onExit={() => navigate('/resume-prep')}
-              isResumeItem={Boolean(resumeItem)}
-            />
-          </div>
-          
-          <div className="quiz-navigator" style={{ 
-            flex: '0 0 280px', 
-            background: 'var(--color-surface)', 
-            borderRadius: '12px', 
-            border: '1px solid var(--color-border)',
-            padding: '20px',
-            position: 'sticky',
-            top: '80px'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', color: 'var(--color-text)' }}>
-              Questions List
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-              {quiz.questions.map((q, idx) => {
-                const isAnswered = !!answers[q.id];
-                const isCurrent = idx === currentIndex;
-                return (
-                  <button
-                    key={q.id}
-                    onClick={() => setCurrentIndex(idx)}
-                    style={{
-                      padding: '8px 0',
-                      borderRadius: '6px',
-                      border: `1px solid ${isCurrent ? 'var(--color-primary)' : (isAnswered ? 'var(--color-primary-muted)' : 'var(--color-border)')}`,
-                      background: isCurrent ? 'var(--color-primary)' : (isAnswered ? 'var(--color-primary-light)' : 'var(--color-surface)'),
-                      color: isCurrent ? 'white' : 'var(--color-text)',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                    }}
-                    title={`Question ${idx + 1}`}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-            
-            <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
-              <Button 
-                variant="primary" 
-                onClick={() => doSubmit(answers, quiz, configMeta)} 
-                disabled={submitting}
-                loading={submitting}
-                style={{ width: '100%' }}
-              >
-                Submit Now
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

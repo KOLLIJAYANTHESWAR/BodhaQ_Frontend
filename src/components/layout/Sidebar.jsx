@@ -102,141 +102,177 @@ const navItems = [
   },
 ];
 
-const mainItems   = navItems.filter((n) => !n.isFooter);
-const footerItems = navItems.filter((n) => n.isFooter);
+const mainItems = navItems.filter((item) => !item.isFooter);
+const footerItems = navItems.filter((item) => item.isFooter);
 
 export default function Sidebar({ mobileOpen, onClose }) {
   const location = useLocation();
+
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem('bodhaq_sidebar_collapsed') === 'true';
   });
 
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      'sidebar-collapsed',
+      collapsed
+    );
+  }, [collapsed]);
+
   function toggleCollapse() {
-    const newVal = !collapsed;
-    setCollapsed(newVal);
-    localStorage.setItem('bodhaq_sidebar_collapsed', newVal);
-    // Update a CSS variable or data attribute on document body to adjust main content padding
-    if (newVal) {
-      document.documentElement.classList.add('sidebar-collapsed');
-    } else {
-      document.documentElement.classList.remove('sidebar-collapsed');
-    }
+    setCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem(
+        'bodhaq_sidebar_collapsed',
+        String(next)
+      );
+      return next;
+    });
   }
 
-  // Restore on mount
-  useEffect(() => {
-    if (collapsed) {
-      document.documentElement.classList.add('sidebar-collapsed');
-    }
-  }, []);
-
   function isActive(to, exact) {
-    if (exact) return location.pathname === to;
-    // weak-topics should also highlight when on /practice
-    if (to === '/weak-topics') return location.pathname.startsWith('/weak-topics') || location.pathname.startsWith('/practice');
+    if (exact) {
+      return location.pathname === to;
+    }
+
+    if (to === '/weak-topics') {
+      return (
+        location.pathname.startsWith('/weak-topics') ||
+        location.pathname.startsWith('/practice')
+      );
+    }
+
     return location.pathname.startsWith(to);
+  }
+
+  function renderNavItem(item) {
+    const active = isActive(item.to, item.exact);
+
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.exact}
+        className={({ isActive: routerActive }) =>
+          `nav-item ${routerActive || active ? 'active' : ''
+          }`
+        }
+        onClick={onClose}
+        aria-current={active ? 'page' : undefined}
+        title={collapsed ? item.label : undefined}
+      >
+        <span className="nav-item-icon">
+          {item.icon}
+        </span>
+
+        <span className="nav-item-label">
+          {item.label}
+        </span>
+      </NavLink>
+    );
   }
 
   return (
     <>
-      {/* Overlay for mobile */}
       <div
-        className={`sidebar-overlay ${mobileOpen ? 'active' : ''}`}
+        className={`sidebar-overlay ${mobileOpen ? 'active' : ''
+          }`}
         onClick={onClose}
         aria-hidden="true"
       />
 
       <nav
-        className={`app-sidebar ${mobileOpen ? 'mobile-open' : ''} ${collapsed ? 'collapsed' : ''}`}
+        className={`app-sidebar ${mobileOpen ? 'mobile-open' : ''
+          } ${collapsed ? 'collapsed' : ''}`}
         aria-label="Main navigation"
       >
-        {/* Brand */}
         <div className="sidebar-brand">
-          <div className="sidebar-logo" aria-hidden="true">B</div>
-          {!collapsed && <span className="sidebar-name">BodhaQ</span>}
-          <button 
-            className="collapse-btn" 
-            onClick={toggleCollapse} 
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            style={{ marginLeft: collapsed ? 0 : 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: '4px' }}
+          <div
+            className="sidebar-logo"
+            aria-hidden="true"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {collapsed ? (
-                <>
-                  <polyline points="13 17 18 12 13 7" />
-                  <polyline points="6 17 11 12 6 7" />
-                </>
-              ) : (
-                <>
-                  <polyline points="11 17 6 12 11 7" />
-                  <polyline points="18 17 13 12 18 7" />
-                </>
-              )}
+            B
+          </div>
+
+          <span className="sidebar-name">
+            BodhaQ
+          </span>
+
+          <button
+            type="button"
+            className="collapse-btn"
+            onClick={toggleCollapse}
+            title={
+              collapsed
+                ? 'Expand sidebar'
+                : 'Collapse sidebar'
+            }
+            aria-label={
+              collapsed
+                ? 'Expand sidebar'
+                : 'Collapse sidebar'
+            }
+            aria-expanded={!collapsed}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="11 17 6 12 11 7" />
+              <polyline points="18 17 13 12 18 7" />
             </svg>
           </button>
         </div>
 
-        {/* Main nav links */}
-        <ul className="sidebar-nav" role="list">
-          {mainItems.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.exact}
-                className={({ isActive: routerActive }) =>
-                  `nav-item ${(routerActive || isActive(item.to, item.exact)) ? 'active' : ''}`
-                }
-                onClick={onClose}
-                aria-current={isActive(item.to, item.exact) ? 'page' : undefined}
-              >
-                {item.icon}
-                {!collapsed && <span>{item.label}</span>}
-              </NavLink>
-            </li>
-          ))}
+        <ul
+          className="sidebar-nav"
+          role="list"
+        >
+          {mainItems.map(renderNavItem)}
         </ul>
 
-        {/* Footer nav (Settings) */}
         <div className="sidebar-footer">
-          {footerItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive: routerActive }) =>
-                `nav-item ${routerActive ? 'active' : ''}`
-              }
-              onClick={onClose}
-            >
-              {item.icon}
-              {!collapsed && <span>{item.label}</span>}
-            </NavLink>
-          ))}
+          {footerItems.map(renderNavItem)}
         </div>
       </nav>
     </>
   );
 }
 
-// Bottom nav for mobile (compact) - pick top 5 most used
-const mobileNavItems = navItems.filter((n) => !n.isFooter).slice(0, 5);
+const mobileNavItems = navItems
+  .filter((item) => !item.isFooter)
+  .slice(0, 5);
 
 export function MobileBottomNav() {
   const location = useLocation();
 
   return (
-    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+    <nav
+      className="mobile-bottom-nav"
+      aria-label="Mobile navigation"
+    >
       {mobileNavItems.map((item) => {
-        const active =
-          item.exact
-            ? location.pathname === item.to
-            : location.pathname.startsWith(item.to);
+        const active = item.exact
+          ? location.pathname === item.to
+          : location.pathname.startsWith(item.to);
+
         return (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.exact}
-            className={`bottom-nav-item ${active ? 'active' : ''}`}
-            aria-current={active ? 'page' : undefined}
+            className={`bottom-nav-item ${active ? 'active' : ''
+              }`}
+            aria-current={
+              active ? 'page' : undefined
+            }
           >
             {item.icon}
             <span>{item.label}</span>

@@ -2,8 +2,15 @@ import { post } from './client.js';
 
 /**
  * Generate structured learning content for a topic.
- * POST /api/learn/topic
+ * POST /api/learning/topic
  */
 export function learnTopic(topic) {
-  return post('/api/learn/topic', { topic });
+  const normalizedTopic =
+    typeof topic === 'string'
+      ? topic.trim()
+      : '';
+
+  return post('/api/learning/topic', {
+    topic: normalizedTopic,
+  });
 }

@@ -8,59 +8,110 @@ import ProgressBar from '../components/common/ProgressBar.jsx';
 
 // Score ring
 function ScoreRing({ percentage }) {
+  const safePercentage = Math.min(
+    100,
+    Math.max(0, Number.isFinite(Number(percentage)) ? Number(percentage) : 0)
+  );
+
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
-  const dash = (percentage / 100) * circumference;
+  const dash = (safePercentage / 100) * circumference;
+
   const color =
-    percentage >= 80 ? 'var(--color-success)' :
-    percentage >= 50 ? 'var(--color-warning)' :
-    'var(--color-error)';
+    safePercentage >= 80
+      ? 'var(--color-success)'
+      : safePercentage >= 50
+        ? 'var(--color-warning)'
+        : 'var(--color-error)';
 
   return (
     <div className="score-ring" aria-hidden="true">
       <svg width="120" height="120" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--color-border)" strokeWidth="10" />
         <circle
-          cx="60" cy="60" r={radius}
+          cx="60"
+          cy="60"
+          r={radius}
+          fill="none"
+          stroke="var(--color-border)"
+          strokeWidth="10"
+        />
+
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
           fill="none"
           stroke={color}
           strokeWidth="10"
-          strokeDasharray={dash + ' ' + circumference}
+          strokeDasharray={`${dash} ${circumference}`}
           strokeDashoffset="0"
           strokeLinecap="round"
           transform="rotate(-90 60 60)"
-          style={{ transition: 'stroke-dasharray 0.6s ease' }}
+          style={{
+            transition: 'stroke-dasharray 0.6s ease',
+          }}
         />
       </svg>
+
       <div className="score-ring-text">
-        <span className="score-ring-percent" style={{ color }}>{Math.round(percentage)}%</span>
-        <span className="score-ring-label">score</span>
+        <span
+          className="score-ring-percent"
+          style={{ color }}
+        >
+          {Math.round(safePercentage)}%
+        </span>
+
+        <span className="score-ring-label">
+          score
+        </span>
       </div>
     </div>
   );
 }
 
 // Explanation button (inline toggle)
-function ExplanationButton({ explanation }) {
+function ExplanationButton({ explanation, id }) {
   const [open, setOpen] = useState(false);
+
   if (!explanation) return null;
+
+  const explanationId = `explanation-${id}`;
+
   return (
     <div style={{ marginTop: 8 }}>
       <button
         type="button"
         className="explanation-btn"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
+        aria-controls={explanationId}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <circle cx="12" cy="12" r="10" />
           <line x1="12" y1="8" x2="12" y2="12" />
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
+
         {open ? 'Hide explanation' : 'Explanation'}
       </button>
+
       {open && (
-        <div className="explanation-panel" role="note" aria-label="Explanation">
+        <div
+          id={explanationId}
+          className="explanation-panel"
+          role="note"
+          aria-label="Explanation"
+        >
           {explanation}
         </div>
       )}
@@ -69,52 +120,112 @@ function ExplanationButton({ explanation }) {
 }
 
 // Mistake card
-function MistakeCard({ mistake }) {
+function MistakeCard({ mistake, index }) {
+  if (!mistake) return null;
+
   return (
-    <Card style={{ borderLeft: '3px solid var(--color-error)' }}>
+    <Card
+      style={{
+        borderLeft: '3px solid var(--color-error)',
+      }}
+    >
       {mistake.topic && (
-        <span className="badge badge-gray" style={{ marginBottom: 10, display: 'inline-block' }}>
+        <span
+          className="badge badge-gray"
+          style={{
+            marginBottom: 10,
+            display: 'inline-block',
+          }}
+        >
           {mistake.topic}
         </span>
       )}
-      <p style={{
-        fontWeight: 600,
-        color: 'var(--color-text)',
-        marginBottom: 14,
-        fontSize: 'var(--font-size-base)',
-        lineHeight: 1.5,
-      }}>
-        {mistake.question}
+
+      <p
+        style={{
+          fontWeight: 600,
+          color: 'var(--color-text)',
+          marginBottom: 14,
+          fontSize: 'var(--font-size-base)',
+          lineHeight: 1.5,
+        }}
+      >
+        {mistake.question || 'Question unavailable'}
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 4 }}>
-        <div style={{
-          background: 'var(--color-error-light)',
-          padding: '8px 14px',
-          borderRadius: 'var(--radius-sm)',
-          display: 'flex', gap: 8, alignItems: 'center',
-        }}>
-          <span style={{ color: 'var(--color-error)', fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          marginBottom: 4,
+        }}
+      >
+        <div
+          style={{
+            background: 'var(--color-error-light)',
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+          }}
+        >
+          <span
+            style={{
+              color: 'var(--color-error)',
+              fontWeight: 600,
+              fontSize: 'var(--font-size-sm)',
+            }}
+          >
             Your answer:
           </span>
-          <span style={{ color: 'var(--color-error)', fontSize: 'var(--font-size-sm)' }}>
-            {mistake.user_answer}
+
+          <span
+            style={{
+              color: 'var(--color-error)',
+              fontSize: 'var(--font-size-sm)',
+            }}
+          >
+            {mistake.user_answer ?? 'No answer'}
           </span>
         </div>
-        <div style={{
-          background: 'var(--color-success-light)',
-          padding: '8px 14px',
-          borderRadius: 'var(--radius-sm)',
-          display: 'flex', gap: 8, alignItems: 'center',
-        }}>
-          <span style={{ color: 'var(--color-success)', fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>
+
+        <div
+          style={{
+            background: 'var(--color-success-light)',
+            padding: '8px 14px',
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+          }}
+        >
+          <span
+            style={{
+              color: 'var(--color-success)',
+              fontWeight: 600,
+              fontSize: 'var(--font-size-sm)',
+            }}
+          >
             Correct answer:
           </span>
-          <span style={{ color: 'var(--color-success)', fontSize: 'var(--font-size-sm)' }}>
-            {mistake.correct_answer}
+
+          <span
+            style={{
+              color: 'var(--color-success)',
+              fontSize: 'var(--font-size-sm)',
+            }}
+          >
+            {mistake.correct_answer ?? 'Unavailable'}
           </span>
         </div>
       </div>
-      <ExplanationButton explanation={mistake.explanation} />
+
+      <ExplanationButton
+        explanation={mistake.explanation}
+        id={mistake.question_id || index}
+      />
     </Card>
   );
 }
@@ -125,24 +236,51 @@ export default function QuizResultsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  let { evaluation, quizId, sourceType, sourceId, filename, isResumeItem, resumeItem } = location.state || {};
-  
-  quizId = quizId || searchParams.get('quizId');
+  let {
+    evaluation,
+    quizId,
+    sourceType,
+    sourceId,
+    filename,
+    isResumeItem,
+    resumeItem,
+  } = location.state || {};
 
+  quizId =
+    quizId ||
+    searchParams.get('quizId') ||
+    searchParams.get('quiz_id');
+
+  // Restore results from local history when the page is opened directly.
   if (!evaluation && quizId) {
     const history = getQuizHistory();
-    const historical = history.find(q => q.quizId === quizId);
+
+    const historical = Array.isArray(history)
+      ? history.find(
+        (quiz) => quiz?.quizId === quizId
+      )
+      : null;
+
     if (historical) {
+      const historicalTotal =
+        historical.total ??
+        historical.totalQuestions ??
+        0;
+
       evaluation = {
-         score: historical.score,
-         total: historical.totalQuestions,
-         percentage: historical.percentage,
-         mistakes: historical.mistakes,
+        score: Number(historical.score) || 0,
+        total: Number(historicalTotal) || 0,
+        percentage: Number(historical.percentage) || 0,
+        mistakes: Array.isArray(historical.mistakes)
+          ? historical.mistakes
+          : [],
       };
+
       sourceType = historical.sourceType;
       sourceId = historical.sourceId;
       filename = historical.filename;
-      isResumeItem = historical.sourceType === 'resume_item';
+      isResumeItem =
+        historical.sourceType === 'resume_item';
     }
   }
 
@@ -150,117 +288,257 @@ export default function QuizResultsPage() {
     return (
       <div className="page-content">
         <PageHeader title="Quiz Results" />
+
         <Card>
-          <p>No quiz results found. <Button variant="ghost" onClick={() => navigate('/quizzes')}>Take a quiz</Button></p>
+          <p>
+            No quiz results found.{' '}
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/quizzes')}
+            >
+              Take a quiz
+            </Button>
+          </p>
         </Card>
       </div>
     );
   }
 
-  const { score, total, percentage, mistakes } = evaluation;
+  const score = Number(evaluation.score) || 0;
+
+  const total =
+    Number(evaluation.total) ||
+    Number(evaluation.totalQuestions) ||
+    0;
+
+  const mistakes = Array.isArray(evaluation.mistakes)
+    ? evaluation.mistakes
+    : [];
+
+  const calculatedPercentage =
+    total > 0
+      ? (score / total) * 100
+      : 0;
+
+  const percentage = Number.isFinite(
+    Number(evaluation.percentage)
+  )
+    ? Number(evaluation.percentage)
+    : calculatedPercentage;
+
+  const safePercentage = Math.min(
+    100,
+    Math.max(0, percentage)
+  );
 
   const feedbackText =
-    percentage >= 80 ? 'Excellent work! You demonstrated strong proficiency on this interview topic.' :
-    percentage >= 50 ? 'Good effort. A few areas need tightening before your interview.' :
-    "This topic needs review. Check the explanations below to master these concepts.";
+    safePercentage >= 80
+      ? 'Excellent work! You demonstrated strong understanding of this material.'
+      : safePercentage >= 50
+        ? 'Good effort. Review the areas you missed to strengthen your understanding.'
+        : 'This topic needs review. Check the explanations below to strengthen these concepts.';
 
   const weakTopicsUrl = '/weak-topics';
 
   return (
     <div className="page-content">
       <PageHeader
-        title={isResumeItem ? "Assessment Complete" : "Quiz Complete"}
+        title={
+          isResumeItem
+            ? 'Assessment Complete'
+            : 'Quiz Complete'
+        }
         subtitle={
           isResumeItem
-            ? ('Resume Assessment: ' + (filename || resumeItem?.name || 'Topic'))
+            ? `Resume Assessment: ${filename ||
+            resumeItem?.name ||
+            'Topic'
+            }`
             : sourceType === 'document' && filename
-            ? ('Study material: ' + filename)
-            : sourceType === 'topic' && sourceId
-            ? ('Topic: ' + sourceId)
-            : undefined
+              ? `Study material: ${filename}`
+              : sourceType === 'topic' && sourceId
+                ? `Topic: ${sourceId}`
+                : undefined
         }
       />
 
       <Card style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
-          <ScoreRing percentage={percentage} />
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <h2 style={{ fontSize: 'var(--font-size-2xl)', marginBottom: 6 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 28,
+            flexWrap: 'wrap',
+          }}
+        >
+          <ScoreRing percentage={safePercentage} />
+
+          <div
+            style={{
+              flex: 1,
+              minWidth: 200,
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 'var(--font-size-2xl)',
+                marginBottom: 6,
+              }}
+            >
               {score} / {total} correct
             </h2>
-            <p style={{ color: 'var(--color-muted)', marginBottom: 16 }}>{feedbackText}</p>
-            <ProgressBar value={score} max={total} />
+
+            <p
+              style={{
+                color: 'var(--color-muted)',
+                marginBottom: 16,
+              }}
+            >
+              {feedbackText}
+            </p>
+
+            <ProgressBar
+              value={score}
+              max={Math.max(total, 1)}
+            />
           </div>
         </div>
       </Card>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          marginBottom: 32,
+          flexWrap: 'wrap',
+        }}
+      >
         {isResumeItem ? (
           <>
             <Button
               variant="primary"
               size="lg"
-              onClick={() => navigate('/resume-prep')}
+              onClick={() =>
+                navigate('/resume-prep')
+              }
             >
               ← Back to Resume Prep Queue
             </Button>
+
             <Button
               variant="secondary"
-              onClick={() => navigate('/quizzes', {
-                state: { resumeItem },
-              })}
+              onClick={() =>
+                navigate('/quizzes', {
+                  state: {
+                    resumeItem,
+                  },
+                })
+              }
             >
               Retake Assessment
             </Button>
           </>
         ) : (
           <>
-            {mistakes && mistakes.length > 0 && (
+            {mistakes.length > 0 && (
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => navigate(weakTopicsUrl, {
-                  state: { quizId, sourceType, sourceId, filename },
-                })}
+                onClick={() =>
+                  navigate(weakTopicsUrl, {
+                    state: {
+                      quizId,
+                      sourceType,
+                      sourceId,
+                      filename,
+                    },
+                  })
+                }
               >
                 Practice Learning Gaps ({mistakes.length})
               </Button>
             )}
+
             <Button
               variant="secondary"
-              onClick={() => navigate('/quizzes', {
-                state: {
-                  source_type: sourceType,
-                  source_id: sourceId,
-                  filename,
-                  quizId,
-                  weakCount: mistakes ? mistakes.length : 0,
-                },
-              })}
+              onClick={() =>
+                navigate('/quizzes', {
+                  state: {
+                    source_type: sourceType,
+                    source_id: sourceId,
+                    filename,
+                    quizId,
+                    weakCount: mistakes.length,
+                  },
+                })
+              }
             >
               Try Again
             </Button>
           </>
         )}
-        <Button variant="ghost" onClick={() => navigate('/')}>Home</Button>
+
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/')}
+        >
+          Home
+        </Button>
       </div>
 
-      {mistakes && mistakes.length > 0 ? (
+      {mistakes.length > 0 ? (
         <div>
-          <h2 style={{ fontSize: 'var(--font-size-xl)', marginBottom: 16 }}>
+          <h2
+            style={{
+              fontSize: 'var(--font-size-xl)',
+              marginBottom: 16,
+            }}
+          >
             Review your mistakes ({mistakes.length})
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {mistakes.map((m) => (
-              <MistakeCard key={m.question_id} mistake={m} />
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            {mistakes.map((mistake, index) => (
+              <MistakeCard
+                key={
+                  mistake?.question_id ||
+                  `mistake-${index}`
+                }
+                mistake={mistake}
+                index={index}
+              />
             ))}
           </div>
         </div>
       ) : (
-        <Card style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }} aria-hidden="true">*</div>
+        <Card
+          style={{
+            textAlign: 'center',
+            padding: 40,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 48,
+              marginBottom: 12,
+            }}
+            aria-hidden="true"
+          >
+            ✓
+          </div>
+
           <h3>Perfect score!</h3>
-          <p>You answered every question correctly. Well done.</p>
+
+          <p>
+            You answered every question correctly.
+            Well done.
+          </p>
         </Card>
       )}
     </div>

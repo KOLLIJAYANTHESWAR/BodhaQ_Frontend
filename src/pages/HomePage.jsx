@@ -98,7 +98,7 @@ export default function HomePage() {
       </Card>
 
       {/* Action cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
+      <div className="home-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
         {/* Topic card */}
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>

@@ -1,6 +1,5 @@
 import { get, post } from './client.js';
 
-
 const VALID_SOURCE_TYPES = new Set([
   'topic',
   'document',
@@ -15,7 +14,6 @@ const VALID_DIFFICULTIES = new Set([
 const MIN_QUESTIONS = 1;
 const MAX_QUESTIONS = 20;
 
-
 /**
  * Normalize a string value.
  */
@@ -24,7 +22,6 @@ function normalizeString(value) {
     ? value.trim()
     : '';
 }
-
 
 /**
  * Validate a positive integer question count.
@@ -44,12 +41,12 @@ function validateQuestionCount(value, fieldName) {
   return value;
 }
 
-
 /**
  * Validate quiz difficulty.
  */
 function validateDifficulty(difficulty) {
-  const normalized = normalizeString(difficulty).toLowerCase();
+  const normalized =
+    normalizeString(difficulty).toLowerCase();
 
   if (!VALID_DIFFICULTIES.has(normalized)) {
     throw new Error(
@@ -60,10 +57,14 @@ function validateDifficulty(difficulty) {
   return normalized;
 }
 
-
 /**
  * Generate a quiz.
+ *
  * POST /api/quiz/generate
+ *
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Gemini API key
  *
  * @param {'topic'|'document'} sourceType
  * @param {string} sourceId — topic string or document_id
@@ -79,7 +80,11 @@ export function generateQuiz(
   const normalizedSourceType =
     normalizeString(sourceType).toLowerCase();
 
-  if (!VALID_SOURCE_TYPES.has(normalizedSourceType)) {
+  if (
+    !VALID_SOURCE_TYPES.has(
+      normalizedSourceType
+    )
+  ) {
     throw new Error(
       'Quiz source must be topic or document.'
     );
@@ -103,23 +108,38 @@ export function generateQuiz(
   const validatedDifficulty =
     validateDifficulty(difficulty);
 
-  return post('/api/quiz/generate', {
-    source_type: normalizedSourceType,
-    source_id: normalizedSourceId,
-    number_of_questions: validatedQuestionCount,
-    difficulty: validatedDifficulty,
-  });
+  return post(
+    '/api/quiz/generate',
+    {
+      source_type: normalizedSourceType,
+      source_id: normalizedSourceId,
+      number_of_questions:
+        validatedQuestionCount,
+      difficulty: validatedDifficulty,
+    },
+    {},
+    {
+      includeGeminiKey: true,
+    }
+  );
 }
-
 
 /**
  * Submit quiz answers.
+ *
  * POST /api/quiz/submit
  *
+ * Evaluation is deterministic on the backend,
+ * so Gemini is not required.
+ *
  * @param {string} quizId
- * @param {Record<string, string>} answers — { "1": "A", "2": "C" }
+ * @param {Record<string, string>} answers
+ *   Example: { "1": "A", "2": "C" }
  */
-export function submitQuiz(quizId, answers) {
+export function submitQuiz(
+  quizId,
+  answers
+) {
   const normalizedQuizId =
     normalizeString(quizId);
 
@@ -139,29 +159,44 @@ export function submitQuiz(quizId, answers) {
     );
   }
 
-  return post('/api/quiz/submit', {
-    quiz_id: normalizedQuizId,
-    answers,
-  });
+  return post(
+    '/api/quiz/submit',
+    {
+      quiz_id: normalizedQuizId,
+      answers,
+    }
+  );
 }
-
 
 /**
  * Get aggregated weak topics across recent quizzes.
+ *
  * GET /api/quiz/gaps
+ *
+ * Learning-gap calculation is deterministic,
+ * so Gemini is not required.
  */
 export function getAggregatedGaps() {
   return get('/api/quiz/gaps');
 }
 
-
 /**
  * Generate targeted practice.
+ *
  * POST /api/quiz/practice
  *
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Gemini API key
+ *
  * document_id is optional.
- * When omitted, the backend generates topic-only practice.
- * When provided, it grounds practice in the original document via RAG.
+ *
+ * When omitted:
+ * - Topic-only practice is generated.
+ *
+ * When provided:
+ * - The backend grounds practice in the
+ *   session-owned document through RAG.
  *
  * @param {string} topic
  * @param {string|null|undefined} documentId
@@ -195,15 +230,24 @@ export function generatePractice(
   const body = {
     topic: normalizedTopic,
     difficulty: validatedDifficulty,
-    question_count: validatedQuestionCount,
+    question_count:
+      validatedQuestionCount,
   };
 
   const normalizedDocumentId =
     normalizeString(documentId);
 
   if (normalizedDocumentId) {
-    body.document_id = normalizedDocumentId;
+    body.document_id =
+      normalizedDocumentId;
   }
 
-  return post('/api/quiz/practice', body);
+  return post(
+    '/api/quiz/practice',
+    body,
+    {},
+    {
+      includeGeminiKey: true,
+    }
+  );
 }

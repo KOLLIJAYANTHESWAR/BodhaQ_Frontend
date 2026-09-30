@@ -14,17 +14,25 @@ import Card from '../components/common/Card';
 import PageHeader from '../components/common/PageHeader';
 import './CodingPage.css';
 
-
 const MAX_SAVED_CODES = 5;
-
 
 function loadSavedCodes() {
   try {
     const codes = getSavedCodes();
 
-    return Array.isArray(codes)
-      ? codes
-      : [];
+    if (!Array.isArray(codes)) {
+      return [];
+    }
+
+    return codes
+      .filter(
+        (code) =>
+          code &&
+          typeof code === 'object' &&
+          typeof code.id === 'string' &&
+          code.id.trim() !== ''
+      )
+      .slice(0, MAX_SAVED_CODES);
   } catch (error) {
     console.error(
       '[CodingPage] Failed to load saved codes:',
@@ -34,7 +42,6 @@ function loadSavedCodes() {
     return [];
   }
 }
-
 
 function formatUpdatedAt(value) {
   if (!value) {
@@ -50,21 +57,14 @@ function formatUpdatedAt(value) {
   return date.toLocaleString();
 }
 
-
 export default function CodingPage() {
   const navigate = useNavigate();
 
-  const [savedCodes, setSavedCodes] =
-    useState([]);
+  const [savedCodes, setSavedCodes] = useState([]);
 
-
-  const refreshSavedCodes =
-    useCallback(() => {
-      setSavedCodes(
-        loadSavedCodes()
-      );
-    }, []);
-
+  const refreshSavedCodes = useCallback(() => {
+    setSavedCodes(loadSavedCodes());
+  }, []);
 
   useEffect(() => {
     refreshSavedCodes();
@@ -78,23 +78,14 @@ export default function CodingPage() {
       refreshSavedCodes();
     };
 
-    window.addEventListener(
-      'focus',
-      handleFocus
-    );
+    window.addEventListener('focus', handleFocus);
 
     return () => {
-      window.removeEventListener(
-        'focus',
-        handleFocus
-      );
+      window.removeEventListener('focus', handleFocus);
     };
   }, [refreshSavedCodes]);
 
-
-  const handleModeSelect = (
-    mode
-  ) => {
+  const handleModeSelect = (mode) => {
     const normalizedMode =
       mode === 'ai-learn'
         ? 'ai-learn'
@@ -113,23 +104,15 @@ export default function CodingPage() {
       );
     }
 
-    navigate(
-      '/coding/workspace',
-      {
-        state: {
-          sourceMode:
-            normalizedMode,
-          isNew: true,
-        },
-      }
-    );
+    navigate('/coding/workspace', {
+      state: {
+        sourceMode: normalizedMode,
+        isNew: true,
+      },
+    });
   };
 
-
-  const handleModeKeyDown = (
-    event,
-    mode
-  ) => {
+  const handleModeKeyDown = (event, mode) => {
     if (
       event.key === 'Enter' ||
       event.key === ' '
@@ -139,48 +122,41 @@ export default function CodingPage() {
     }
   };
 
-
-  const handleOpenSaved = (
-    savedCode
-  ) => {
+  const handleOpenSaved = (savedCode) => {
     if (
       !savedCode ||
-      !savedCode.id
+      typeof savedCode !== 'object' ||
+      typeof savedCode.id !== 'string' ||
+      !savedCode.id.trim()
     ) {
       return;
     }
 
     const sourceMode =
-      savedCode.sourceMode ===
-        'ai-learn'
+      savedCode.sourceMode === 'ai-learn'
         ? 'ai-learn'
         : 'ide';
 
-    navigate(
-      '/coding/workspace',
-      {
-        state: {
-          sourceMode,
-          savedCodeId:
-            savedCode.id,
-          isNew: false,
-        },
-      }
-    );
+    navigate('/coding/workspace', {
+      state: {
+        sourceMode,
+        savedCodeId: savedCode.id,
+        isNew: false,
+      },
+    });
   };
 
-
-  const handleDelete = (
-    id
-  ) => {
-    if (!id) {
+  const handleDelete = (id) => {
+    if (
+      typeof id !== 'string' ||
+      !id.trim()
+    ) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        'Are you sure you want to delete this saved code?'
-      );
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this saved code?'
+    );
 
     if (!confirmed) {
       return;
@@ -208,14 +184,12 @@ export default function CodingPage() {
     }
   };
 
-
   return (
     <div className="page-content">
       <PageHeader
         title="Coding"
         subtitle="Learn, practice, test and improve your coding skills."
       />
-
 
       <section
         style={{
@@ -224,31 +198,24 @@ export default function CodingPage() {
       >
         <h2
           style={{
-            fontSize:
-              'var(--font-size-xl)',
-            marginBottom:
-              '16px',
+            fontSize: 'var(--font-size-xl)',
+            marginBottom: '16px',
           }}
         >
           Select Mode
         </h2>
 
-
         <div
           style={{
-            display:
-              'grid',
+            display: 'grid',
             gridTemplateColumns:
               'repeat(auto-fit, minmax(300px, 1fr))',
             gap: '20px',
           }}
         >
-
           <Card
             onClick={() =>
-              handleModeSelect(
-                'ai-learn'
-              )
+              handleModeSelect('ai-learn')
             }
             onKeyDown={(event) =>
               handleModeKeyDown(
@@ -260,21 +227,16 @@ export default function CodingPage() {
             tabIndex={0}
             aria-label="Open AI Learn Code mode"
             style={{
-              cursor:
-                'pointer',
-              transition:
-                'all 0.2s',
-              border:
-                '2px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              border: '2px solid transparent',
             }}
             className="hover-border-primary"
           >
             <div
               style={{
-                fontSize:
-                  '32px',
-                marginBottom:
-                  '12px',
+                fontSize: '32px',
+                marginBottom: '12px',
               }}
               aria-hidden="true"
             >
@@ -283,10 +245,8 @@ export default function CodingPage() {
 
             <h3
               style={{
-                margin:
-                  '0 0 8px 0',
-                fontSize:
-                  'var(--font-size-lg)',
+                margin: '0 0 8px 0',
+                fontSize: 'var(--font-size-lg)',
               }}
             >
               AI Learn Code
@@ -295,22 +255,19 @@ export default function CodingPage() {
             <p
               style={{
                 margin: 0,
-                color:
-                  'var(--color-text-secondary)',
-                lineHeight:
-                  '1.5',
+                color: 'var(--color-text-secondary)',
+                lineHeight: '1.5',
               }}
             >
-              Learn a new coding problem with AI. Generate custom test cases, get code explanations, and optimize your solutions.
+              Learn a new coding problem with AI.
+              Generate custom test cases, get code
+              explanations, and optimize your solutions.
             </p>
           </Card>
 
-
           <Card
             onClick={() =>
-              handleModeSelect(
-                'ide'
-              )
+              handleModeSelect('ide')
             }
             onKeyDown={(event) =>
               handleModeKeyDown(
@@ -322,21 +279,16 @@ export default function CodingPage() {
             tabIndex={0}
             aria-label="Open IDE mode"
             style={{
-              cursor:
-                'pointer',
-              transition:
-                'all 0.2s',
-              border:
-                '2px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              border: '2px solid transparent',
             }}
             className="hover-border-primary"
           >
             <div
               style={{
-                fontSize:
-                  '32px',
-                marginBottom:
-                  '12px',
+                fontSize: '32px',
+                marginBottom: '12px',
               }}
               aria-hidden="true"
             >
@@ -345,10 +297,8 @@ export default function CodingPage() {
 
             <h3
               style={{
-                margin:
-                  '0 0 8px 0',
-                fontSize:
-                  'var(--font-size-lg)',
+                margin: '0 0 8px 0',
+                fontSize: 'var(--font-size-lg)',
               }}
             >
               IDE
@@ -357,55 +307,44 @@ export default function CodingPage() {
             <p
               style={{
                 margin: 0,
-                color:
-                  'var(--color-text-secondary)',
-                lineHeight:
-                  '1.5',
+                color: 'var(--color-text-secondary)',
+                lineHeight: '1.5',
               }}
             >
-              Practice coding independently in a distraction-free environment. Run your code and debug issues on your own.
+              Practice coding independently in a
+              distraction-free environment. Run your
+              code and debug issues on your own.
             </p>
           </Card>
-
         </div>
       </section>
-
 
       <section className="saved-codes-section">
         <h2
           style={{
-            fontSize:
-              'var(--font-size-xl)',
-            marginBottom:
-              '16px',
+            fontSize: 'var(--font-size-xl)',
+            marginBottom: '16px',
           }}
         >
           Saved Codes (
-          {
-            Math.min(
-              savedCodes.length,
-              MAX_SAVED_CODES
-            )
-          }
+          {Math.min(
+            savedCodes.length,
+            MAX_SAVED_CODES
+          )}
           /{MAX_SAVED_CODES})
         </h2>
-
 
         {savedCodes.length === 0 ? (
           <Card
             style={{
-              textAlign:
-                'center',
-              padding:
-                '40px',
+              textAlign: 'center',
+              padding: '40px',
             }}
           >
             <p
               style={{
-                color:
-                  'var(--color-muted)',
-                marginBottom:
-                  '8px',
+                color: 'var(--color-muted)',
+                marginBottom: '8px',
               }}
             >
               No saved codes yet.
@@ -413,120 +352,97 @@ export default function CodingPage() {
 
             <p
               style={{
-                color:
-                  'var(--color-muted)',
+                color: 'var(--color-muted)',
                 margin: 0,
               }}
             >
-              Save your coding work from the IDE to see it here.
+              Save your coding work from the IDE to
+              see it here.
             </p>
           </Card>
         ) : (
           <div
             style={{
-              display:
-                'flex',
-              flexDirection:
-                'column',
-              gap:
-                '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
             }}
           >
-            {savedCodes.map(
-              (code) => (
-                <Card
-                  key={code.id}
-                  style={{
-                    display:
-                      'flex',
-                    justifyContent:
-                      'space-between',
-                    alignItems:
-                      'center',
-                  }}
-                >
-                  <div>
-                    <h3
-                      style={{
-                        margin:
-                          '0 0 8px 0',
-                        fontSize:
-                          'var(--font-size-lg)',
-                      }}
-                    >
-                      {
-                        code.title ||
-                        'Untitled'
-                      }
-                    </h3>
-
-                    <div
-                      style={{
-                        display:
-                          'flex',
-                        gap:
-                          '12px',
-                        alignItems:
-                          'center',
-                      }}
-                    >
-                      <span className="badge badge-gray">
-                        {
-                          code.language ||
-                          'unknown'
-                        }
-                      </span>
-
-                      <span
-                        style={{
-                          fontSize:
-                            'var(--font-size-sm)',
-                          color:
-                            'var(--color-muted)',
-                        }}
-                      >
-                        Updated:{' '}
-                        {formatUpdatedAt(
-                          code.updatedAt
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
+            {savedCodes.map((code) => (
+              <Card
+                key={code.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div>
+                  <h3
+                    style={{
+                      margin: '0 0 8px 0',
+                      fontSize:
+                        'var(--font-size-lg)',
+                    }}
+                  >
+                    {code.title || 'Untitled'}
+                  </h3>
 
                   <div
                     style={{
-                      display:
-                        'flex',
-                      gap:
-                        '12px',
+                      display: 'flex',
+                      gap: '12px',
+                      alignItems: 'center',
                     }}
                   >
-                    <Button
-                      variant="primary"
-                      onClick={() =>
-                        handleOpenSaved(
-                          code
-                        )
-                      }
-                    >
-                      Open
-                    </Button>
+                    <span className="badge badge-gray">
+                      {code.language || 'unknown'}
+                    </span>
 
-                    <Button
-                      variant="danger"
-                      onClick={() =>
-                        handleDelete(
-                          code.id
-                        )
-                      }
+                    <span
+                      style={{
+                        fontSize:
+                          'var(--font-size-sm)',
+                        color:
+                          'var(--color-muted)',
+                      }}
                     >
-                      Delete
-                    </Button>
+                      Updated:{' '}
+                      {formatUpdatedAt(
+                        code.updatedAt
+                      )}
+                    </span>
                   </div>
-                </Card>
-              )
-            )}
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '12px',
+                  }}
+                >
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() =>
+                      handleOpenSaved(code)
+                    }
+                  >
+                    Open
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={() =>
+                      handleDelete(code.id)
+                    }
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </Card>
+            ))}
           </div>
         )}
       </section>

@@ -12,8 +12,7 @@ export default function Spinner({
       aria-live="polite"
     >
       <div
-        className={`spinner ${size === 'lg' ? 'spinner-lg' : ''
-          }`}
+        className={`spinner ${size === 'lg' ? 'spinner-lg' : ''}`}
         aria-hidden="true"
       />
 
@@ -33,6 +32,21 @@ export function LoadingSteps({
 }) {
   const safeSteps = Array.isArray(steps)
     ? steps
+      .map((step) => {
+        if (typeof step === 'string') {
+          return step;
+        }
+
+        if (
+          typeof step === 'number' ||
+          typeof step === 'boolean'
+        ) {
+          return String(step);
+        }
+
+        return null;
+      })
+      .filter((step) => step !== null)
     : [];
 
   if (safeSteps.length === 0) {
@@ -52,9 +66,7 @@ export function LoadingSteps({
 
   const numericStep = Number(currentStep);
 
-  const safeCurrentStep = Number.isFinite(
-    numericStep
-  )
+  const safeCurrentStep = Number.isFinite(numericStep)
     ? Math.min(
       Math.max(Math.floor(numericStep), 0),
       safeSteps.length - 1
@@ -77,24 +89,14 @@ export function LoadingSteps({
         aria-label="Progress"
       >
         {safeSteps.map((step, index) => {
-          const isActive =
-            index === safeCurrentStep;
-
-          const isCompleted =
-            index < safeCurrentStep;
+          const isActive = index === safeCurrentStep;
+          const isCompleted = index < safeCurrentStep;
 
           return (
             <li
-              key={`${String(step)}-${index}`}
-              className={
-                `loading-step ${isActive ? 'active' : ''
-                }`
-              }
-              aria-current={
-                isActive
-                  ? 'step'
-                  : undefined
-              }
+              key={`${step}-${index}`}
+              className={`loading-step ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'step' : undefined}
             >
               <span aria-hidden="true">
                 {isCompleted

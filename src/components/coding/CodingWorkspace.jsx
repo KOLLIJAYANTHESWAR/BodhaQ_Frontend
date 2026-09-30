@@ -248,6 +248,12 @@ export default function CodingWorkspace({
   const [executionResult, setExecutionResult] =
     useState(null);
 
+  const [sampleResults, setSampleResults] =
+    useState(null);
+
+  const [isExecutionPanelCollapsed, setIsExecutionPanelCollapsed] =
+    useState(true);
+
 
   const [showAiModal, setShowAiModal] =
     useState(false);
@@ -507,6 +513,13 @@ export default function CodingWorkspace({
         const savedCode =
           normalizeString(codeItem.code);
 
+        /*
+         * Restore the complete saved workspace.
+         *
+         * AI Learn saves the problem context together with
+         * the code. IDE saves intentionally contain no problem
+         * context, so the sourceMode decides which UI is shown.
+         */
         setWorkspaceState(
           (prevState) => ({
             ...prevState,
@@ -528,29 +541,97 @@ export default function CodingWorkspace({
               savedCode ||
               (
                 savedLanguage === 'java'
-                  ? prevState.javaCode
-                  : prevState.pythonCode
+                  ? normalizeStarterCode(
+                    codeItem.javaCode,
+                    prevState.javaCode
+                  )
+                  : normalizeStarterCode(
+                    codeItem.pythonCode,
+                    prevState.pythonCode
+                  )
               ),
 
             javaCode:
-              savedLanguage === 'java'
-                ? (
-                  savedCode ||
-                  prevState.javaCode
-                )
-                : prevState.javaCode,
+              normalizeStarterCode(
+                codeItem.javaCode,
+                savedLanguage === 'java'
+                  ? savedCode
+                  : prevState.javaCode
+              ),
 
             pythonCode:
-              savedLanguage === 'python'
-                ? (
-                  savedCode ||
-                  prevState.pythonCode
-                )
-                : prevState.pythonCode,
+              normalizeStarterCode(
+                codeItem.pythonCode,
+                savedLanguage === 'python'
+                  ? savedCode
+                  : prevState.pythonCode
+              ),
 
             sourceMode:
-              codeItem.sourceMode ||
-              prevState.sourceMode,
+              codeItem.sourceMode === 'ai-learn'
+                ? 'ai-learn'
+                : 'ide',
+
+            problemId:
+              codeItem.problemId ||
+              null,
+
+            problemStatement:
+              normalizeString(
+                codeItem.problemStatement
+              ),
+
+            inputFormat:
+              normalizeString(
+                codeItem.inputFormat
+              ),
+
+            outputFormat:
+              normalizeString(
+                codeItem.outputFormat
+              ),
+
+            constraints:
+              normalizeString(
+                codeItem.constraints
+              ),
+
+            examples:
+              normalizeArray(
+                codeItem.examples
+              ),
+
+            sample:
+              normalizeString(
+                codeItem.sample
+              ).trim() ||
+              getExampleSample(
+                normalizeArray(
+                  codeItem.examples
+                )
+              ),
+
+            publicTests:
+              normalizeArray(
+                codeItem.publicTests
+              ),
+
+            hiddenTestCount:
+              Number.isInteger(
+                codeItem.hiddenTestCount
+              )
+                ? codeItem.hiddenTestCount
+                : 0,
+
+            difficulty:
+              normalizeString(
+                codeItem.difficulty
+              ),
+
+            topics:
+              normalizeArray(
+                codeItem.topics
+              ),
           })
         );
 
@@ -853,18 +934,141 @@ export default function CodingWorkspace({
 
   const handleSave = () => {
     try {
-      saveCode({
-        id: workspaceState.id,
+      /*
+       * Save the complete workspace state.
+       *
+       * AI Learn:
+       * - problem name
+       * - problem statement
+       * - input/output format
+       * - constraints
+       * - examples
+       * - sample
+       * - public tests
+       * - hidden test count
+       * - difficulty
+       * - topics
+       * - problem ID
+       * - Java/Python code
+       *
+       * IDE:
+       * - sourceMode
+       * - language
+       * - code
+       * - Java/Python code
+       *
+       * The storage layer preserves every field supplied here.
+       */
+      const savedWorkspace = {
+        id:
+          workspaceState.id,
+
         title:
           workspaceState.title ||
           'Untitled',
+
         language:
-          workspaceState.language,
+          workspaceState.language === 'python'
+            ? 'python'
+            : 'java',
+
         code:
           workspaceState.code || '',
+
+        javaCode:
+          workspaceState.javaCode || '',
+
+        pythonCode:
+          workspaceState.pythonCode || '',
+
         sourceMode:
-          workspaceState.sourceMode,
-      });
+          workspaceState.sourceMode === 'ai-learn'
+            ? 'ai-learn'
+            : 'ide',
+      };
+
+      /*
+       * Only AI Learn workspaces persist problem context.
+       * This prevents an IDE save from accidentally becoming
+       * an AI Learn workspace when it is reopened later.
+       */
+      if (
+        workspaceState.sourceMode === 'ai-learn'
+      ) {
+        Object.assign(
+          savedWorkspace,
+          {
+            problemId:
+              workspaceState.problemId ||
+              null,
+
+            problemStatement:
+              normalizeString(
+                workspaceState.problemStatement
+              ),
+
+            inputFormat:
+              normalizeString(
+                workspaceState.inputFormat
+              ),
+
+            outputFormat:
+              normalizeString(
+                workspaceState.outputFormat
+              ),
+
+            constraints:
+              normalizeString(
+                workspaceState.constraints
+              ),
+
+            examples:
+              normalizeArray(
+                workspaceState.examples
+              ),
+
+            sample:
+              normalizeString(
+                workspaceState.sample
+              ),
+
+            publicTests:
+              normalizeArray(
+                workspaceState.publicTests
+              ),
+
+            hiddenTestCount:
+              Number.isInteger(
+                workspaceState.hiddenTestCount
+              )
+                ? workspaceState.hiddenTestCount
+                : 0,
+
+            difficulty:
+              normalizeString(
+                workspaceState.difficulty
+              ),
+
+            topics:
+              normalizeArray(
+                workspaceState.topics
+              ),
+          }
+        );
+      }
+
+      saveCode(
+        savedWorkspace
+      );
+
+      /*
+       * Keep the current workspace synchronized as well.
+       * This is useful when the user continues editing after
+       * saving and later returns to the coding workspace.
+       */
+      saveCurrentWorkspace(
+        workspaceState
+      );
 
       showActionMessage(
         'Code saved successfully.'
@@ -880,13 +1084,14 @@ export default function CodingWorkspace({
   };
 
 
-  const handleRun = async () => {
+  const handleRunCustom = async () => {
     if (isRunning || isSubmitting) {
       return;
     }
 
     setIsRunning(true);
     setExecutionResult(null);
+    setSampleResults(null);
 
     try {
       const result =
@@ -896,9 +1101,7 @@ export default function CodingWorkspace({
           customInput
         );
 
-      setExecutionResult(
-        result
-      );
+      setExecutionResult(result);
     } catch (err) {
       setExecutionResult({
         status:
@@ -919,6 +1122,110 @@ export default function CodingWorkspace({
   };
 
 
+  const handleRunSamples = async () => {
+    if (isRunning || isSubmitting) {
+      return;
+    }
+
+    const examples =
+      normalizeArray(workspaceState.examples).filter(
+        (example) =>
+          example &&
+          typeof example === 'object' &&
+          typeof example.input === 'string'
+      );
+
+    if (!examples.length) {
+      showActionMessage(
+        'No sample test cases are available to run.'
+      );
+      return;
+    }
+
+    setIsExecutionPanelCollapsed(false);
+    setIsRunning(true);
+    setExecutionResult(null);
+    setSampleResults(null);
+
+    try {
+      const results = [];
+
+      for (const example of examples) {
+        const input = example.input;
+        const expectedOutput =
+          typeof example.output === 'string'
+            ? example.output
+            : '';
+
+        try {
+          const result =
+            await executeCode(
+              workspaceState.language,
+              workspaceState.code,
+              input
+            );
+
+          const actualOutput =
+            typeof result?.stdout === 'string'
+              ? result.stdout
+              : '';
+
+          results.push({
+            input,
+            expectedOutput,
+            actualOutput,
+            status:
+              result?.status || 'execution_failed',
+            stderr:
+              typeof result?.stderr === 'string'
+                ? result.stderr
+                : '',
+            executionTimeMs:
+              Number.isFinite(
+                result?.execution_time_ms
+              )
+                ? result.execution_time_ms
+                : null,
+            passed:
+              result?.status === 'success' &&
+              actualOutput.trim() === expectedOutput.trim(),
+          });
+        } catch (err) {
+          results.push({
+            input,
+            expectedOutput,
+            actualOutput: '',
+            status:
+              err?.code ||
+              'execution_service_unavailable',
+            stderr:
+              getErrorMessage(
+                err,
+                'Unable to execute this sample right now. Please try again.'
+              ),
+            executionTimeMs: null,
+            passed: false,
+          });
+        }
+      }
+
+      setSampleResults(results);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+
+  const handleTopRun = async () => {
+    if (isRunning || isSubmitting) {
+      return;
+    }
+
+    setIsExecutionPanelCollapsed(false);
+    await handleRunSamples();
+  };
+
+
   const handleRunSuite =
     async (testSuite) => {
       if (isSubmitting || isRunning) {
@@ -934,6 +1241,7 @@ export default function CodingWorkspace({
 
       setIsSubmitting(true);
       setExecutionResult(null);
+      setSampleResults(null);
 
       try {
         const result =
@@ -1232,268 +1540,291 @@ export default function CodingWorkspace({
 
   return (
     <div className="coding-workspace-container">
-
-      <header className="workspace-header">
-        <div className="workspace-header-left">
-          <h2>
+      <header
+        className="workspace-header"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+        }}
+      >
+        <div
+          className="workspace-header-left"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            minWidth: 0,
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {workspaceState.title}
           </h2>
 
           <select
-            value={
-              workspaceState.language
-            }
-            onChange={
-              handleLanguageChange
-            }
+            value={workspaceState.language}
+            onChange={handleLanguageChange}
             className="language-selector"
-            disabled={
-              isRunning ||
-              isSubmitting
-            }
+            disabled={isRunning || isSubmitting}
           >
-            <option value="java">
-              Java
-            </option>
-
-            <option value="python">
-              Python
-            </option>
+            <option value="java">Java</option>
+            <option value="python">Python</option>
           </select>
         </div>
-      </header>
 
+        <div
+          className="workspace-header-actions"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: '8px',
+            marginLeft: 'auto',
+            paddingRight: '56px',
+            flexShrink: 0,
+          }}
+        >
+          {!isExecutionPanelCollapsed && null}
+
+          {isExecutionPanelCollapsed && (
+            <Button
+              variant="secondary"
+              onClick={handleTopRun}
+              loading={isRunning}
+              disabled={isSubmitting}
+              title="Run sample test cases"
+            >
+              {isRunning ? 'Running...' : 'Run'}
+            </Button>
+          )}
+
+          <Button
+            variant="primary"
+            className="btn-ghost"
+            onClick={() => {
+              setShowAiModal(true);
+              setAiAnalysisResult(null);
+              setAiImprovementResult(null);
+            }}
+            disabled={isAnalyzing}
+          >
+            ✨ AI Analyze
+          </Button>
+
+          {actionMessage && (
+            <div
+              className="action-message"
+              role="status"
+              style={{
+                margin: 0,
+                maxWidth: '240px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {actionMessage}
+            </div>
+          )}
+
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={isRunning || isSubmitting}
+          >
+            Save
+          </Button>
+        </div>
+      </header>
 
       <div
         className="workspace-main"
         ref={workspaceRef}
+        style={{
+          minHeight: 0,
+          flex: '1 1 auto',
+        }}
       >
+        {workspaceState.sourceMode !== 'ide' && (
+          <div
+            className="workspace-panel problem-panel"
+            style={{
+              width: `${panelWidth}%`,
+              flex: 'none',
+            }}
+          >
+            <h3>
+              Problem
+            </h3>
 
-        <div
-          className="workspace-panel problem-panel"
-          style={{
-            width: `${panelWidth}%`,
-            flex: 'none',
-          }}
-        >
-          <h3>
-            Problem
-          </h3>
+            {workspaceState.problemStatement ? (
+              <div className="problem-content">
 
-          {workspaceState.problemStatement ? (
-            <div className="problem-content">
-
-              <p
-                style={{
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {
-                  workspaceState.problemStatement
-                }
-              </p>
-
-
-              {workspaceState.inputFormat && (
-                <>
-                  <h4>
-                    Input Format
-                  </h4>
-
-                  <p
-                    style={{
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {
-                      workspaceState.inputFormat
-                    }
-                  </p>
-                </>
-              )}
+                <p
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {
+                    workspaceState.problemStatement
+                  }
+                </p>
 
 
-              {workspaceState.outputFormat && (
-                <>
-                  <h4>
-                    Output Format
-                  </h4>
-
-                  <p
-                    style={{
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {
-                      workspaceState.outputFormat
-                    }
-                  </p>
-                </>
-              )}
-
-
-              {workspaceState.constraints && (
-                <>
-                  <h4>
-                    Constraints
-                  </h4>
-
-                  <p
-                    style={{
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {
-                      workspaceState.constraints
-                    }
-                  </p>
-                </>
-              )}
-
-
-              {workspaceState.examples.length > 0 ? (
-                <>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent:
-                        'space-between',
-                      alignItems:
-                        'center',
-                      marginTop: '16px',
-                      marginBottom: '12px',
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: 0,
-                      }}
-                    >
-                      Examples
+                {workspaceState.inputFormat && (
+                  <>
+                    <h4>
+                      Input Format
                     </h4>
 
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        handleRunSuite(
-                          'samples'
-                        )
-                      }
-                      disabled={
-                        isSubmitting ||
-                        isRunning
-                      }
+                    <p
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                      }}
                     >
-                      Run Samples
-                    </Button>
-                  </div>
+                      {
+                        workspaceState.inputFormat
+                      }
+                    </p>
+                  </>
+                )}
 
 
-                  {workspaceState.examples.map(
-                    (example, index) => (
-                      <details
-                        key={`example-${index}`}
+                {workspaceState.outputFormat && (
+                  <>
+                    <h4>
+                      Output Format
+                    </h4>
+
+                    <p
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {
+                        workspaceState.outputFormat
+                      }
+                    </p>
+                  </>
+                )}
+
+
+                {workspaceState.constraints && (
+                  <>
+                    <h4>
+                      Constraints
+                    </h4>
+
+                    <p
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {
+                        workspaceState.constraints
+                      }
+                    </p>
+                  </>
+                )}
+
+
+                {workspaceState.examples.length > 0 ? (
+                  <>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent:
+                          'space-between',
+                        alignItems:
+                          'center',
+                        marginTop: '16px',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      <h4
                         style={{
-                          marginBottom:
-                            '16px',
-                          padding: '12px',
-                          background:
-                            'var(--color-surface-2)',
-                          borderRadius:
-                            '6px',
+                          margin: 0,
                         }}
-                        open={
-                          index === 0
-                        }
                       >
-                        <summary
-                          style={{
-                            cursor:
-                              'pointer',
-                            fontWeight:
-                              'bold',
-                            color:
-                              'var(--color-text)',
-                            outline:
-                              'none',
-                          }}
-                        >
-                          Example{' '}
-                          {index + 1}
-                        </summary>
+                        Examples
+                      </h4>
+                    </div>
 
-                        <div
+
+                    {workspaceState.examples.map(
+                      (example, index) => (
+                        <details
+                          key={`example-${index}`}
                           style={{
-                            marginTop:
-                              '12px',
+                            marginBottom:
+                              '16px',
+                            padding: '12px',
+                            background:
+                              'var(--color-surface-2)',
+                            borderRadius:
+                              '6px',
                           }}
+                          open
                         >
-                          <span
+                          <summary
                             style={{
+                              cursor:
+                                'pointer',
+                              fontWeight:
+                                'bold',
                               color:
-                                'var(--color-muted)',
-                              fontSize:
-                                '0.9em',
+                                'var(--color-text)',
+                              outline:
+                                'none',
                             }}
                           >
-                            Input:
-                          </span>
+                            Example{' '}
+                            {index + 1}
+                          </summary>
 
-                          <br />
-
-                          <pre
+                          <div
                             style={{
-                              margin:
-                                '4px 0',
-                              padding:
-                                '8px',
+                              marginTop:
+                                '12px',
                             }}
                           >
-                            {
-                              example?.input ||
-                              ''
-                            }
-                          </pre>
-                        </div>
+                            <span
+                              style={{
+                                color:
+                                  'var(--color-muted)',
+                                fontSize:
+                                  '0.9em',
+                              }}
+                            >
+                              Input:
+                            </span>
+
+                            <br />
+
+                            <pre
+                              style={{
+                                margin:
+                                  '4px 0',
+                                padding:
+                                  '8px',
+                              }}
+                            >
+                              {
+                                example?.input ||
+                                ''
+                              }
+                            </pre>
+                          </div>
 
 
-                        <div
-                          style={{
-                            marginTop:
-                              '8px',
-                          }}
-                        >
-                          <span
-                            style={{
-                              color:
-                                'var(--color-muted)',
-                              fontSize:
-                                '0.9em',
-                            }}
-                          >
-                            Output:
-                          </span>
-
-                          <br />
-
-                          <pre
-                            style={{
-                              margin:
-                                '4px 0',
-                              padding:
-                                '8px',
-                            }}
-                          >
-                            {
-                              example?.output ||
-                              ''
-                            }
-                          </pre>
-                        </div>
-
-
-                        {example?.explanation && (
                           <div
                             style={{
                               marginTop:
@@ -1508,270 +1839,274 @@ export default function CodingWorkspace({
                                   '0.9em',
                               }}
                             >
-                              Explanation:
+                              Output:
                             </span>
 
                             <br />
 
-                            <p
+                            <pre
                               style={{
                                 margin:
                                   '4px 0',
-                                whiteSpace:
-                                  'pre-wrap',
+                                padding:
+                                  '8px',
                               }}
                             >
                               {
-                                example.explanation
+                                example?.output ||
+                                ''
                               }
-                            </p>
+                            </pre>
                           </div>
-                        )}
-                      </details>
-                    )
-                  )}
-                </>
-              ) : workspaceState.sample ? (
-                <>
-                  <h4>
-                    Sample Test Case
-                  </h4>
-
-                  <pre
-                    style={{
-                      whiteSpace:
-                        'pre-wrap',
-                      background:
-                        'var(--color-surface-2)',
-                      padding:
-                        '12px',
-                      borderRadius:
-                        '6px',
-                    }}
-                  >
-                    {
-                      workspaceState.sample
-                    }
-                  </pre>
-                </>
-              ) : null}
 
 
-              {workspaceState.publicTests.length > 0 && (
-                <>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent:
-                        'space-between',
-                      alignItems:
-                        'center',
-                      marginTop: '16px',
-                      marginBottom:
-                        '12px',
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: 0,
-                      }}
-                    >
-                      Public Tests (
-                      {
-                        workspaceState
-                          .publicTests
-                          .length
-                      }
+                          {example?.explanation && (
+                            <div
+                              style={{
+                                marginTop:
+                                  '8px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color:
+                                    'var(--color-muted)',
+                                  fontSize:
+                                    '0.9em',
+                                }}
+                              >
+                                Explanation:
+                              </span>
+
+                              <br />
+
+                              <p
+                                style={{
+                                  margin:
+                                    '4px 0',
+                                  whiteSpace:
+                                    'pre-wrap',
+                                }}
+                              >
+                                {
+                                  example.explanation
+                                }
+                              </p>
+                            </div>
+                          )}
+                        </details>
                       )
+                    )}
+                  </>
+                ) : workspaceState.sample ? (
+                  <>
+                    <h4>
+                      Sample Test Case
                     </h4>
 
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        handleRunSuite(
-                          'public'
-                        )
-                      }
-                      disabled={
-                        isSubmitting ||
-                        isRunning
-                      }
+                    <pre
+                      style={{
+                        whiteSpace:
+                          'pre-wrap',
+                        background:
+                          'var(--color-surface-2)',
+                        padding:
+                          '12px',
+                        borderRadius:
+                          '6px',
+                      }}
                     >
-                      Run Public Tests
-                    </Button>
-                  </div>
+                      {
+                        workspaceState.sample
+                      }
+                    </pre>
+                  </>
+                ) : null}
 
 
-                  {workspaceState.publicTests.map(
-                    (testCase, index) => (
-                      <details
-                        key={`public-${index}`}
+                {workspaceState.publicTests.length > 0 && (
+                  <>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent:
+                          'space-between',
+                        alignItems:
+                          'center',
+                        marginTop: '16px',
+                        marginBottom:
+                          '12px',
+                      }}
+                    >
+                      <h4
                         style={{
-                          marginBottom:
-                            '16px',
-                          padding:
-                            '12px',
-                          background:
-                            'var(--color-surface-2)',
-                          borderRadius:
-                            '6px',
+                          margin: 0,
                         }}
                       >
-                        <summary
-                          style={{
-                            cursor:
-                              'pointer',
-                            fontWeight:
-                              'bold',
-                            color:
-                              'var(--color-text)',
-                            outline:
-                              'none',
-                          }}
-                        >
-                          Test Case{' '}
-                          {index + 1}
-                        </summary>
+                        Public Tests (
+                        {
+                          workspaceState
+                            .publicTests
+                            .length
+                        }
+                        )
+                      </h4>
 
-                        <div
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          handleRunSuite(
+                            'public'
+                          )
+                        }
+                        disabled={
+                          isSubmitting ||
+                          isRunning
+                        }
+                      >
+                        Run Public Tests
+                      </Button>
+                    </div>
+
+
+                    {workspaceState.publicTests.map(
+                      (testCase, index) => (
+                        <details
+                          key={`public-${index}`}
                           style={{
-                            marginTop:
+                            marginBottom:
+                              '16px',
+                            padding:
                               '12px',
+                            background:
+                              'var(--color-surface-2)',
+                            borderRadius:
+                              '6px',
                           }}
+                          open
                         >
-                          <span
+                          <summary
                             style={{
+                              cursor:
+                                'pointer',
+                              fontWeight:
+                                'bold',
                               color:
-                                'var(--color-muted)',
-                              fontSize:
-                                '0.9em',
+                                'var(--color-text)',
+                              outline:
+                                'none',
                             }}
                           >
-                            Input:
-                          </span>
+                            Test Case{' '}
+                            {index + 1}
+                          </summary>
 
-                          <br />
-
-                          <pre
+                          <div
                             style={{
-                              margin:
-                                '4px 0',
-                              padding:
+                              marginTop:
+                                '12px',
+                            }}
+                          >
+                            <span
+                              style={{
+                                color:
+                                  'var(--color-muted)',
+                                fontSize:
+                                  '0.9em',
+                              }}
+                            >
+                              Input:
+                            </span>
+
+                            <br />
+
+                            <pre
+                              style={{
+                                margin:
+                                  '4px 0',
+                                padding:
+                                  '8px',
+                              }}
+                            >
+                              {
+                                testCase?.input ||
+                                ''
+                              }
+                            </pre>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop:
                                 '8px',
                             }}
                           >
-                            {
-                              testCase?.input ||
-                              ''
-                            }
-                          </pre>
-                        </div>
+                            <span
+                              style={{
+                                color:
+                                  'var(--color-muted)',
+                                fontSize:
+                                  '0.9em',
+                              }}
+                            >
+                              Expected Output:
+                            </span>
 
-                        <div
-                          style={{
-                            marginTop:
-                              '8px',
-                          }}
-                        >
-                          <span
-                            style={{
-                              color:
-                                'var(--color-muted)',
-                              fontSize:
-                                '0.9em',
-                            }}
-                          >
-                            Expected Output:
-                          </span>
+                            <br />
 
-                          <br />
+                            <pre
+                              style={{
+                                margin:
+                                  '4px 0',
+                                padding:
+                                  '8px',
+                              }}
+                            >
+                              {
+                                testCase?.output ||
+                                ''
+                              }
+                            </pre>
+                          </div>
+                        </details>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="empty-problem">
+                <p>
+                  No problem context
+                  provided.
+                </p>
 
-                          <pre
-                            style={{
-                              margin:
-                                '4px 0',
-                              padding:
-                                '8px',
-                            }}
-                          >
-                            {
-                              testCase?.output ||
-                              ''
-                            }
-                          </pre>
-                        </div>
-                      </details>
-                    )
-                  )}
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="empty-problem">
-              <p>
-                No problem context
-                provided.
-              </p>
-
-              <p>
-                Write your code
-                independently.
-              </p>
-            </div>
-          )}
+                <p>
+                  Write your code
+                  independently.
+                </p>
+              </div>
+            )}
 
 
-          <div className="custom-input-section">
-            <h4>
-              Custom Input
-            </h4>
-
-            <textarea
-              placeholder="Enter custom input here..."
-              style={{
-                width: '100%',
-                minHeight: '120px',
-                resize: 'vertical',
-                padding: '12px',
-                background:
-                  'var(--color-surface-2)',
-                border:
-                  '1px solid var(--color-border)',
-                borderRadius:
-                  '6px',
-                color:
-                  'var(--color-text)',
-                fontFamily:
-                  'monospace',
-              }}
-              value={customInput}
-              onChange={(e) =>
-                setCustomInput(
-                  e.target.value
-                )
-              }
-              disabled={
-                isRunning ||
-                isSubmitting
-              }
-            />
           </div>
-        </div>
+        )}
 
-
-        <div
-          className="workspace-resizer"
-          onMouseDown={
-            handleMouseDown
-          }
-        />
-
+        {workspaceState.sourceMode !== 'ide' && (
+          <div
+            className="workspace-resizer"
+            onMouseDown={handleMouseDown}
+          />
+        )}
 
         <div
           className="workspace-panel editor-panel"
           style={{
-            width: `${100 - panelWidth}%`,
+            width:
+              workspaceState.sourceMode === 'ide'
+                ? '100%'
+                : `${100 - panelWidth}%`,
             flex: 'none',
           }}
         >
@@ -1807,392 +2142,581 @@ export default function CodingWorkspace({
         </div>
       </div>
 
-
-      <footer className="workspace-footer">
-
-        <div className="toolbar">
-
-          <Button
-            variant="secondary"
-            onClick={handleRun}
-            loading={isRunning}
-            disabled={
-              isSubmitting
-            }
-          >
-            {isRunning
-              ? 'Running...'
-              : 'Run'}
-          </Button>
-
-
-          <Button
-            variant="success"
-            onClick={() =>
-              handleRunSuite('all')
-            }
-            loading={
-              isSubmitting
-            }
-            disabled={
-              isRunning ||
-              !workspaceState.problemId
-            }
-            title="Submit code for evaluation"
-          >
-            {isSubmitting
-              ? 'Evaluating...'
-              : 'Submit'}
-          </Button>
-
-
-          {workspaceState.sourceMode ===
-            'ide' && (
-              <Button
-                variant="primary"
-                className="btn-ghost"
-                onClick={() => {
-                  setShowAiModal(
-                    true
-                  );
-
-                  setAiAnalysisResult(
-                    null
-                  );
-
-                  setAiImprovementResult(
-                    null
-                  );
-                }}
-              >
-                ✨ AI Analyze
-              </Button>
-            )}
-
-
-          {workspaceState.sourceMode ===
-            'learn' && (
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowAiModal(
-                      true
-                    );
-
-                    setAiAnalysisResult(
-                      null
-                    );
-
-                    setAiImprovementResult(
-                      null
-                    );
-
-                    handleAiAction(
-                      'explain'
-                    );
-                  }}
-                >
-                  Explain Code
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowAiModal(
-                      true
-                    );
-
-                    setAiAnalysisResult(
-                      null
-                    );
-
-                    setAiImprovementResult(
-                      null
-                    );
-
-                    handleAiAction(
-                      'improve'
-                    );
-                  }}
-                >
-                  Improve Code
-                </Button>
-
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowAiModal(
-                      true
-                    );
-
-                    setAiAnalysisResult(
-                      null
-                    );
-
-                    setAiImprovementResult(
-                      null
-                    );
-
-                    handleAiAction(
-                      'testcases'
-                    );
-                  }}
-                >
-                  Create Test Cases
-                </Button>
-              </>
-            )}
-
-
-          <div
-            style={{
-              marginLeft:
-                'auto',
-              display:
-                'flex',
-              alignItems:
-                'center',
-              gap: '12px',
-            }}
-          >
-            {actionMessage && (
-              <div
-                className="action-message"
-                style={{
-                  margin: 0,
-                }}
-                role="status"
-              >
-                {actionMessage}
-              </div>
-            )}
-
-            <Button
-              variant="primary"
-              onClick={
-                handleSave
-              }
-              disabled={
-                isRunning ||
-                isSubmitting
-              }
-            >
-              Save
-            </Button>
-          </div>
-        </div>
-
-
-        <div
-          className={`results-resizer ${isDraggingResults
-              ? 'dragging'
-              : ''
-            }`}
-          onPointerDown={
-            handleResultsPointerDown
-          }
-          title="Resize test results panel"
-        />
-
-
-        <div
-          className="test-results-section"
+      {!isExecutionPanelCollapsed && (
+        <section
+          className="execution-panel"
           style={{
-            height: `${resultsHeight}px`,
-            display:
-              resultsHeight === 0
-                ? 'none'
-                : 'flex',
-            flexDirection:
-              'column',
+            flex: '0 0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            padding: '12px 16px 16px',
+            borderTop: '1px solid var(--color-border)',
+            background: 'var(--color-surface)',
           }}
         >
-          <h4
+          <div
+            className="custom-input-section"
             style={{
               flexShrink: 0,
             }}
           >
-            Test / Execution Results
-          </h4>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                marginBottom: '8px',
+              }}
+            >
+              <h4 style={{ margin: 0 }}>
+                Custom Input
+              </h4>
 
-
-          {!executionResult &&
-            !isRunning &&
-            !isSubmitting && (
-              <p className="test-results-placeholder">
-                Click Run to execute
-                your code, or Submit
-                to evaluate it.
-              </p>
-            )}
-
-
-          {(isRunning ||
-            isSubmitting) && (
-              <p className="test-results-placeholder">
-                {isRunning
-                  ? 'Executing code...'
-                  : 'Evaluating submission...'}
-              </p>
-            )}
-
-
-          {executionResult &&
-            !executionResult.isSubmit && (
               <div
-                className={`execution-result ${executionResult.status
-                  }`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRunCustom}
+                  loading={isRunning}
+                  disabled={isSubmitting}
+                  aria-label="Run custom input"
+                  title="Run only the custom input"
+                >
+                  {isRunning ? 'Running...' : 'Run Custom'}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    setIsExecutionPanelCollapsed(true)
+                  }
+                  disabled={isRunning || isSubmitting}
+                  aria-label="Collapse execution panel"
+                  title="Collapse execution panel"
+                >
+                  Collapse
+                </Button>
+              </div>
+            </div>
+
+            <textarea
+              placeholder="Enter custom input here..."
+              style={{
+                width: '100%',
+                minHeight: '100px',
+                resize: 'vertical',
+                padding: '12px',
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '6px',
+                color: 'var(--color-text)',
+                fontFamily: 'monospace',
+                boxSizing: 'border-box',
+              }}
+              value={customInput}
+              onChange={(e) =>
+                setCustomInput(e.target.value)
+              }
+              disabled={isRunning || isSubmitting}
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              marginTop: '12px',
+              marginBottom: '8px',
+              flexShrink: 0,
+            }}
+          >
+            <h4 style={{ margin: 0 }}>
+              Execution Controls
+            </h4>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              {workspaceState.sourceMode !== 'ide' && (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={handleRunSamples}
+                    loading={isRunning}
+                    disabled={isSubmitting}
+                    aria-label="Run sample test cases"
+                    title="Run sample test cases"
+                  >
+                    {isRunning ? 'Running...' : 'Run'}
+                  </Button>
+
+                  <Button
+                    variant="success"
+                    onClick={() => handleRunSuite('all')}
+                    loading={isSubmitting}
+                    disabled={
+                      isRunning || !workspaceState.problemId
+                    }
+                    title="Submit code for evaluation"
+                  >
+                    {isSubmitting ? 'Evaluating...' : 'Submit'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div
+            className={`results-resizer ${isDraggingResults
+              ? 'dragging'
+              : ''
+              }`}
+            onPointerDown={
+              handleResultsPointerDown
+            }
+            title="Resize test results panel"
+          />
+
+
+          <div
+            className="test-results-section"
+            style={{
+              height: `${resultsHeight}px`,
+              display:
+                resultsHeight === 0
+                  ? 'none'
+                  : 'flex',
+              flexDirection:
+                'column',
+            }}
+          >
+            <h4
+              style={{
+                flexShrink: 0,
+              }}
+            >
+              Test / Execution Results
+            </h4>
+
+
+            {!executionResult &&
+              !isRunning &&
+              !isSubmitting && (
+                <p className="test-results-placeholder">
+                  Click Run to execute
+                  your code, or Submit
+                  to evaluate it.
+                </p>
+              )}
+
+
+            {(isRunning ||
+              isSubmitting) && (
+                <p className="test-results-placeholder">
+                  {isRunning
+                    ? 'Executing code...'
+                    : 'Evaluating submission...'}
+                </p>
+              )}
+            {Array.isArray(sampleResults) && (
+              <div
+                className="execution-result"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                }}
               >
                 <div
                   style={{
-                    fontWeight:
-                      'bold',
-                    marginBottom:
-                      '8px',
-                    color:
-                      executionResult.status ===
-                        'success'
-                        ? 'var(--color-success)'
-                        : 'var(--color-error)',
+                    fontWeight: 'bold',
+                    color: sampleResults.every(
+                      (result) => result.passed
+                    )
+                      ? 'var(--color-success)'
+                      : 'var(--color-error)',
                   }}
                 >
-                  {executionResult.status ===
-                    'success'
-                    ? '✓ Execution Successful'
-                    : executionResult.status ===
-                      'compilation_error'
-                      ? 'Compilation Error'
-                      : executionResult.status ===
-                        'runtime_error'
-                        ? 'Runtime Error'
-                        : executionResult.status ===
-                          'timeout'
-                          ? 'Execution Timed Out'
-                          : executionResult.status ===
-                            'output_limit'
-                            ? 'Output Limit Exceeded'
-                            : executionResult.status ===
-                              'execution_service_unavailable'
-                              ? 'Unable to execute code right now. Please try again.'
-                              : executionResult.status ===
-                                'NETWORK_ERROR'
-                                ? 'Unable to connect to the execution service.'
-                                : 'Execution Failed'}
+                  {sampleResults.every(
+                    (result) => result.passed
+                  )
+                    ? '✓ All Samples Passed'
+                    : '✗ Sample Test Failed'}
                 </div>
 
+                <div
+                  style={{
+                    background: 'var(--color-surface-2)',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    fontWeight: '600',
+                  }}
+                >
+                  Samples:{' '}
+                  {
+                    sampleResults.filter(
+                      (result) => result.passed
+                    ).length
+                  }{' '}
+                  / {sampleResults.length}
+                </div>
 
-                {executionResult.stdout && (
-                  <>
+                {sampleResults.map(
+                  (result, index) => (
                     <div
-                      style={{
-                        fontWeight:
-                          '600',
-                        marginTop:
-                          '12px',
-                        color:
-                          'var(--color-text)',
-                      }}
-                    >
-                      Output:
-                    </div>
-
-                    <pre
+                      key={`sample-result-${index}`}
                       style={{
                         background:
                           'var(--color-surface-2)',
-                        padding:
-                          '8px',
-                        borderRadius:
-                          '4px',
-                        marginTop:
-                          '4px',
-                        whiteSpace:
-                          'pre-wrap',
-                        wordBreak:
-                          'break-word',
-                        color:
-                          'var(--color-text)',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        border:
+                          '1px solid var(--color-border)',
                       }}
                     >
-                      {
-                        executionResult.stdout
-                      }
-                    </pre>
-                  </>
-                )}
+                      <div
+                        style={{
+                          fontWeight: '600',
+                          marginBottom: '12px',
+                          color:
+                            result.passed
+                              ? 'var(--color-success)'
+                              : 'var(--color-error)',
+                        }}
+                      >
+                        {result.passed
+                          ? '✓'
+                          : '✗'}{' '}
+                        Sample {index + 1}
+                      </div>
 
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px',
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: '600',
+                              marginBottom: '4px',
+                            }}
+                          >
+                            Input
+                          </div>
+                          <pre
+                            style={{
+                              background:
+                                'var(--color-surface)',
+                              padding: '8px',
+                              borderRadius: '4px',
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              color: 'var(--color-text)',
+                            }}
+                          >
+                            {result.input || '(No input)'}
+                          </pre>
+                        </div>
 
-                {executionResult.stderr && (
-                  <>
-                    <div
-                      style={{
-                        fontWeight:
-                          '600',
-                        marginTop:
-                          '12px',
-                        color:
-                          'var(--color-text)',
-                      }}
-                    >
-                      Error:
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: '600',
+                              marginBottom: '4px',
+                            }}
+                          >
+                            Expected Output
+                          </div>
+                          <pre
+                            style={{
+                              background:
+                                'var(--color-surface)',
+                              padding: '8px',
+                              borderRadius: '4px',
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              color: 'var(--color-text)',
+                            }}
+                          >
+                            {result.expectedOutput ||
+                              '(No expected output)'}
+                          </pre>
+                        </div>
+
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: '600',
+                              marginBottom: '4px',
+                            }}
+                          >
+                            Actual Output
+                          </div>
+                          <pre
+                            style={{
+                              background:
+                                'var(--color-surface)',
+                              padding: '8px',
+                              borderRadius: '4px',
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              color: 'var(--color-text)',
+                            }}
+                          >
+                            {result.actualOutput ||
+                              '(No output)'}
+                          </pre>
+                        </div>
+
+                        {result.stderr && (
+                          <div>
+                            <div
+                              style={{
+                                fontWeight: '600',
+                                marginBottom: '4px',
+                                color:
+                                  'var(--color-error)',
+                              }}
+                            >
+                              Error
+                            </div>
+                            <pre
+                              style={{
+                                background:
+                                  'var(--color-surface)',
+                                padding: '8px',
+                                borderRadius: '4px',
+                                margin: 0,
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                color:
+                                  'var(--color-error)',
+                              }}
+                            >
+                              {result.stderr}
+                            </pre>
+                          </div>
+                        )}
+
+                        {result.executionTimeMs !== null && (
+                          <div
+                            style={{
+                              fontSize: '0.9rem',
+                              color:
+                                'var(--color-muted)',
+                            }}
+                          >
+                            Execution Time:{' '}
+                            {result.executionTimeMs} ms
+                          </div>
+                        )}
+                      </div>
                     </div>
-
-                    <pre
-                      style={{
-                        background:
-                          'var(--color-surface-2)',
-                        padding:
-                          '8px',
-                        borderRadius:
-                          '4px',
-                        marginTop:
-                          '4px',
-                        whiteSpace:
-                          'pre-wrap',
-                        wordBreak:
-                          'break-word',
-                        color:
-                          'var(--color-error)',
-                      }}
-                    >
-                      {
-                        executionResult.stderr
-                      }
-                    </pre>
-                  </>
+                  )
                 )}
-
-
-                {executionResult.execution_time_ms !==
-                  undefined &&
-                  executionResult.execution_time_ms >=
-                  0 && (
-                    <div
-                      style={{
-                        marginTop:
-                          '12px',
-                        fontSize:
-                          '0.9rem',
-                        color:
-                          'var(--color-muted)',
-                      }}
-                    >
-                      Execution Time:{' '}
-                      {
-                        executionResult.execution_time_ms
-                      }{' '}
-                      ms
-                    </div>
-                  )}
               </div>
             )}
 
+            {executionResult &&
+              !executionResult.isSubmit &&
+              !Array.isArray(sampleResults) && (
+                <div
+                  className={`execution-result ${executionResult.status}`}
+                >
+                  <div
+                    style={{
+                      fontWeight: 'bold',
+                      marginBottom: '12px',
+                      color:
+                        executionResult.status === 'success'
+                          ? 'var(--color-success)'
+                          : 'var(--color-error)',
+                    }}
+                  >
+                    {executionResult.status === 'success'
+                      ? '✓ Execution Successful'
+                      : executionResult.status === 'compilation_error'
+                        ? 'Compilation Error'
+                        : executionResult.status === 'runtime_error'
+                          ? 'Runtime Error'
+                          : executionResult.status === 'timeout'
+                            ? 'Execution Timed Out'
+                            : executionResult.status === 'output_limit'
+                              ? 'Output Limit Exceeded'
+                              : executionResult.status ===
+                                'execution_service_unavailable'
+                                ? 'Unable to execute code right now. Please try again.'
+                                : executionResult.status === 'NETWORK_ERROR'
+                                  ? 'Unable to connect to the execution service.'
+                                  : 'Execution Failed'}
+                  </div>
 
-          {executionResult &&
-            executionResult.isSubmit && (
-              <div
-                className={`execution-result ${[
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: '600',
+                          marginBottom: '4px',
+                          color: 'var(--color-text)',
+                        }}
+                      >
+                        Input
+                      </div>
+
+                      <pre
+                        style={{
+                          background: 'var(--color-surface-2)',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          margin: 0,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          color: 'var(--color-text)',
+                          minHeight: '20px',
+                        }}
+                      >
+                        {executionResult.input ??
+                          customInput ??
+                          '(No custom input)'}
+                      </pre>
+                    </div>
+
+                    {(executionResult.expected_output !== undefined ||
+                      executionResult.expected !== undefined) && (
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: '600',
+                              marginBottom: '4px',
+                              color: 'var(--color-text)',
+                            }}
+                          >
+                            Expected Output
+                          </div>
+
+                          <pre
+                            style={{
+                              background: 'var(--color-surface-2)',
+                              padding: '8px',
+                              borderRadius: '4px',
+                              margin: 0,
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              color: 'var(--color-text)',
+                            }}
+                          >
+                            {executionResult.expected_output ??
+                              executionResult.expected ??
+                              ''}
+                          </pre>
+                        </div>
+                      )}
+
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: '600',
+                          marginBottom: '4px',
+                          color: 'var(--color-text)',
+                        }}
+                      >
+                        Actual Output
+                      </div>
+
+                      <pre
+                        style={{
+                          background: 'var(--color-surface-2)',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          margin: 0,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          color: 'var(--color-text)',
+                          minHeight: '20px',
+                        }}
+                      >
+                        {executionResult.stdout || '(No output)'}
+                      </pre>
+                    </div>
+
+                    {executionResult.stderr && (
+                      <div>
+                        <div
+                          style={{
+                            fontWeight: '600',
+                            marginBottom: '4px',
+                            color: 'var(--color-text)',
+                          }}
+                        >
+                          Error
+                        </div>
+
+                        <pre
+                          style={{
+                            background: 'var(--color-surface-2)',
+                            padding: '8px',
+                            borderRadius: '4px',
+                            margin: 0,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            color: 'var(--color-error)',
+                          }}
+                        >
+                          {executionResult.stderr}
+                        </pre>
+                      </div>
+                    )}
+
+                    {executionResult.execution_time_ms !== undefined &&
+                      executionResult.execution_time_ms >= 0 && (
+                        <div
+                          style={{
+                            fontSize: '0.9rem',
+                            color: 'var(--color-muted)',
+                          }}
+                        >
+                          Execution Time:{' '}
+                          {executionResult.execution_time_ms} ms
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
+
+
+
+
+            {executionResult &&
+              executionResult.isSubmit && (
+                <div
+                  className={`execution-result ${[
                     'Accepted',
                     'Tests Passed',
                   ].includes(
@@ -2200,72 +2724,260 @@ export default function CodingWorkspace({
                   )
                     ? 'success'
                     : 'error'
-                  }`}
-              >
-                <div
-                  style={{
-                    fontWeight:
-                      'bold',
-                    marginBottom:
-                      '8px',
-                    color:
-                      [
-                        'Accepted',
-                        'Tests Passed',
-                      ].includes(
-                        executionResult.status
-                      )
-                        ? 'var(--color-success)'
-                        : 'var(--color-error)',
-                  }}
+                    }`}
                 >
-                  {[
-                    'Accepted',
-                    'Tests Passed',
-                  ].includes(
-                    executionResult.status
-                  )
-                    ? `✓ ${executionResult.status}`
-                    : executionResult.status ===
-                      'System Error'
-                      ? 'Unable to evaluate code right now. Please try again.'
-                      : `✗ ${executionResult.status}`}
-                </div>
+                  <div
+                    style={{
+                      fontWeight:
+                        'bold',
+                      marginBottom:
+                        '8px',
+                      color:
+                        [
+                          'Accepted',
+                          'Tests Passed',
+                        ].includes(
+                          executionResult.status
+                        )
+                          ? 'var(--color-success)'
+                          : 'var(--color-error)',
+                    }}
+                  >
+                    {[
+                      'Accepted',
+                      'Tests Passed',
+                    ].includes(
+                      executionResult.status
+                    )
+                      ? `✓ ${executionResult.status}`
+                      : executionResult.status ===
+                        'System Error'
+                        ? 'Unable to evaluate code right now. Please try again.'
+                        : `✗ ${executionResult.status}`}
+                  </div>
 
 
-                {executionResult.status !==
-                  'System Error' && (
-                    <div
-                      style={{
-                        color:
-                          'var(--color-text)',
-                        marginBottom:
-                          '16px',
-                      }}
-                    >
-                      {executionResult.testSuite ===
-                        'all' && (
-                          <div
-                            style={{
-                              display:
-                                'grid',
-                              gridTemplateColumns:
-                                'repeat(4, 1fr)',
-                              gap: '12px',
-                              background:
-                                'var(--color-surface-2)',
-                              padding:
-                                '16px',
-                              borderRadius:
-                                '8px',
-                            }}
-                          >
+                  {executionResult.status !==
+                    'System Error' && (
+                      <div
+                        style={{
+                          color:
+                            'var(--color-text)',
+                          marginBottom:
+                            '16px',
+                        }}
+                      >
+                        {executionResult.testSuite ===
+                          'all' && (
                             <div
                               style={{
                                 display:
-                                  'flex',
-                                flexDirection:
-                                  'column',
+                                  'grid',
+                                gridTemplateColumns:
+                                  'repeat(4, 1fr)',
+                                gap: '12px',
+                                background:
+                                  'var(--color-surface-2)',
+                                padding:
+                                  '16px',
+                                borderRadius:
+                                  '8px',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display:
+                                    'flex',
+                                  flexDirection:
+                                    'column',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color:
+                                      'var(--color-muted)',
+                                    fontSize:
+                                      '0.85em',
+                                    textTransform:
+                                      'uppercase',
+                                    marginBottom:
+                                      '4px',
+                                  }}
+                                >
+                                  Samples
+                                </span>
+
+                                <span
+                                  style={{
+                                    fontSize:
+                                      '1.2em',
+                                    fontWeight:
+                                      'bold',
+                                  }}
+                                >
+                                  {
+                                    executionResult.passed_samples ||
+                                    0
+                                  }{' '}
+                                  /{' '}
+                                  {
+                                    executionResult.total_samples ||
+                                    0
+                                  }
+                                </span>
+                              </div>
+
+
+                              <div
+                                style={{
+                                  display:
+                                    'flex',
+                                  flexDirection:
+                                    'column',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color:
+                                      'var(--color-muted)',
+                                    fontSize:
+                                      '0.85em',
+                                    textTransform:
+                                      'uppercase',
+                                    marginBottom:
+                                      '4px',
+                                  }}
+                                >
+                                  Public
+                                </span>
+
+                                <span
+                                  style={{
+                                    fontSize:
+                                      '1.2em',
+                                    fontWeight:
+                                      'bold',
+                                  }}
+                                >
+                                  {
+                                    executionResult.passed_public ||
+                                    0
+                                  }{' '}
+                                  /{' '}
+                                  {
+                                    executionResult.total_public ||
+                                    0
+                                  }
+                                </span>
+                              </div>
+
+
+                              <div
+                                style={{
+                                  display:
+                                    'flex',
+                                  flexDirection:
+                                    'column',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color:
+                                      'var(--color-muted)',
+                                    fontSize:
+                                      '0.85em',
+                                    textTransform:
+                                      'uppercase',
+                                    marginBottom:
+                                      '4px',
+                                  }}
+                                >
+                                  Hidden
+                                </span>
+
+                                <span
+                                  style={{
+                                    fontSize:
+                                      '1.2em',
+                                    fontWeight:
+                                      'bold',
+                                  }}
+                                >
+                                  {
+                                    executionResult.passed_hidden ||
+                                    0
+                                  }{' '}
+                                  /{' '}
+                                  {
+                                    executionResult.total_hidden ||
+                                    0
+                                  }
+                                </span>
+                              </div>
+
+
+                              <div
+                                style={{
+                                  display:
+                                    'flex',
+                                  flexDirection:
+                                    'column',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color:
+                                      'var(--color-primary)',
+                                    fontSize:
+                                      '0.85em',
+                                    textTransform:
+                                      'uppercase',
+                                    marginBottom:
+                                      '4px',
+                                    fontWeight:
+                                      'bold',
+                                  }}
+                                >
+                                  Total
+                                </span>
+
+                                <span
+                                  style={{
+                                    fontSize:
+                                      '1.2em',
+                                    fontWeight:
+                                      'bold',
+                                    color:
+                                      'var(--color-primary)',
+                                  }}
+                                >
+                                  {
+                                    executionResult.passed_tests ||
+                                    0
+                                  }{' '}
+                                  /{' '}
+                                  {
+                                    executionResult.total_tests ||
+                                    0
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+
+                        {executionResult.testSuite ===
+                          'samples' && (
+                            <div
+                              style={{
+                                background:
+                                  'var(--color-surface-2)',
+                                padding:
+                                  '12px 16px',
+                                borderRadius:
+                                  '8px',
+                                display:
+                                  'inline-block',
                               }}
                             >
                               <span
@@ -2276,8 +2988,8 @@ export default function CodingWorkspace({
                                     '0.85em',
                                   textTransform:
                                     'uppercase',
-                                  marginBottom:
-                                    '4px',
+                                  marginRight:
+                                    '12px',
                                 }}
                               >
                                 Samples
@@ -2286,7 +2998,7 @@ export default function CodingWorkspace({
                               <span
                                 style={{
                                   fontSize:
-                                    '1.2em',
+                                    '1.1em',
                                   fontWeight:
                                     'bold',
                                 }}
@@ -2302,14 +3014,21 @@ export default function CodingWorkspace({
                                 }
                               </span>
                             </div>
+                          )}
 
 
+                        {executionResult.testSuite ===
+                          'public' && (
                             <div
                               style={{
+                                background:
+                                  'var(--color-surface-2)',
+                                padding:
+                                  '12px 16px',
+                                borderRadius:
+                                  '8px',
                                 display:
-                                  'flex',
-                                flexDirection:
-                                  'column',
+                                  'inline-block',
                               }}
                             >
                               <span
@@ -2320,17 +3039,17 @@ export default function CodingWorkspace({
                                     '0.85em',
                                   textTransform:
                                     'uppercase',
-                                  marginBottom:
-                                    '4px',
+                                  marginRight:
+                                    '12px',
                                 }}
                               >
-                                Public
+                                Public Tests
                               </span>
 
                               <span
                                 style={{
                                   fontSize:
-                                    '1.2em',
+                                    '1.1em',
                                   fontWeight:
                                     'bold',
                                 }}
@@ -2346,384 +3065,129 @@ export default function CodingWorkspace({
                                 }
                               </span>
                             </div>
+                          )}
+                      </div>
+                    )}
 
 
-                            <div
-                              style={{
-                                display:
-                                  'flex',
-                                flexDirection:
-                                  'column',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color:
-                                    'var(--color-muted)',
-                                  fontSize:
-                                    '0.85em',
-                                  textTransform:
-                                    'uppercase',
-                                  marginBottom:
-                                    '4px',
-                                }}
-                              >
-                                Hidden
-                              </span>
+                  {executionResult.stderr && (
+                    <>
+                      <div
+                        style={{
+                          fontWeight:
+                            '600',
+                          marginTop:
+                            '12px',
+                          color:
+                            'var(--color-text)',
+                        }}
+                      >
+                        Details:
+                      </div>
 
-                              <span
-                                style={{
-                                  fontSize:
-                                    '1.2em',
-                                  fontWeight:
-                                    'bold',
-                                }}
-                              >
-                                {
-                                  executionResult.passed_hidden ||
-                                  0
-                                }{' '}
-                                /{' '}
-                                {
-                                  executionResult.total_hidden ||
-                                  0
-                                }
-                              </span>
-                            </div>
-
-
-                            <div
-                              style={{
-                                display:
-                                  'flex',
-                                flexDirection:
-                                  'column',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color:
-                                    'var(--color-primary)',
-                                  fontSize:
-                                    '0.85em',
-                                  textTransform:
-                                    'uppercase',
-                                  marginBottom:
-                                    '4px',
-                                  fontWeight:
-                                    'bold',
-                                }}
-                              >
-                                Total
-                              </span>
-
-                              <span
-                                style={{
-                                  fontSize:
-                                    '1.2em',
-                                  fontWeight:
-                                    'bold',
-                                  color:
-                                    'var(--color-primary)',
-                                }}
-                              >
-                                {
-                                  executionResult.passed_tests ||
-                                  0
-                                }{' '}
-                                /{' '}
-                                {
-                                  executionResult.total_tests ||
-                                  0
-                                }
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-
-                      {executionResult.testSuite ===
-                        'samples' && (
-                          <div
-                            style={{
-                              background:
-                                'var(--color-surface-2)',
-                              padding:
-                                '12px 16px',
-                              borderRadius:
-                                '8px',
-                              display:
-                                'inline-block',
-                            }}
-                          >
-                            <span
-                              style={{
-                                color:
-                                  'var(--color-muted)',
-                                fontSize:
-                                  '0.85em',
-                                textTransform:
-                                  'uppercase',
-                                marginRight:
-                                  '12px',
-                              }}
-                            >
-                              Samples
-                            </span>
-
-                            <span
-                              style={{
-                                fontSize:
-                                  '1.1em',
-                                fontWeight:
-                                  'bold',
-                              }}
-                            >
-                              {
-                                executionResult.passed_samples ||
-                                0
-                              }{' '}
-                              /{' '}
-                              {
-                                executionResult.total_samples ||
-                                0
-                              }
-                            </span>
-                          </div>
-                        )}
-
-
-                      {executionResult.testSuite ===
-                        'public' && (
-                          <div
-                            style={{
-                              background:
-                                'var(--color-surface-2)',
-                              padding:
-                                '12px 16px',
-                              borderRadius:
-                                '8px',
-                              display:
-                                'inline-block',
-                            }}
-                          >
-                            <span
-                              style={{
-                                color:
-                                  'var(--color-muted)',
-                                fontSize:
-                                  '0.85em',
-                                textTransform:
-                                  'uppercase',
-                                marginRight:
-                                  '12px',
-                              }}
-                            >
-                              Public Tests
-                            </span>
-
-                            <span
-                              style={{
-                                fontSize:
-                                  '1.1em',
-                                fontWeight:
-                                  'bold',
-                              }}
-                            >
-                              {
-                                executionResult.passed_public ||
-                                0
-                              }{' '}
-                              /{' '}
-                              {
-                                executionResult.total_public ||
-                                0
-                              }
-                            </span>
-                          </div>
-                        )}
-                    </div>
+                      <pre
+                        style={{
+                          background:
+                            'var(--color-surface-2)',
+                          padding:
+                            '8px',
+                          borderRadius:
+                            '4px',
+                          marginTop:
+                            '4px',
+                          whiteSpace:
+                            'pre-wrap',
+                          wordBreak:
+                            'break-word',
+                          color:
+                            'var(--color-error)',
+                        }}
+                      >
+                        {
+                          executionResult.stderr
+                        }
+                      </pre>
+                    </>
                   )}
 
 
-                {executionResult.stderr && (
-                  <>
+                  {executionResult.hidden_test_failed ? (
                     <div
                       style={{
-                        fontWeight:
-                          '600',
                         marginTop:
                           '12px',
-                        color:
-                          'var(--color-text)',
-                      }}
-                    >
-                      Details:
-                    </div>
-
-                    <pre
-                      style={{
                         background:
                           'var(--color-surface-2)',
                         padding:
-                          '8px',
+                          '12px',
                         borderRadius:
                           '4px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight:
+                            '600',
+                          color:
+                            'var(--color-text)',
+                          marginBottom:
+                            '8px',
+                        }}
+                      >
+                        Hidden Test Failed
+                      </div>
+
+                      <div
+                        style={{
+                          color:
+                            'var(--color-muted)',
+                        }}
+                      >
+                        A hidden test case
+                        did not pass. Try
+                        to find edge cases
+                        in your logic.
+                      </div>
+                    </div>
+                  ) : executionResult.failed_test_input && (
+                    <div
+                      style={{
                         marginTop:
+                          '12px',
+                        background:
+                          'var(--color-surface-2)',
+                        padding:
+                          '12px',
+                        borderRadius:
                           '4px',
-                        whiteSpace:
-                          'pre-wrap',
-                        wordBreak:
-                          'break-word',
-                        color:
-                          'var(--color-error)',
                       }}
                     >
-                      {
-                        executionResult.stderr
-                      }
-                    </pre>
-                  </>
-                )}
-
-
-                {executionResult.hidden_test_failed ? (
-                  <div
-                    style={{
-                      marginTop:
-                        '12px',
-                      background:
-                        'var(--color-surface-2)',
-                      padding:
-                        '12px',
-                      borderRadius:
-                        '4px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight:
-                          '600',
-                        color:
-                          'var(--color-text)',
-                        marginBottom:
-                          '8px',
-                      }}
-                    >
-                      Hidden Test Failed
-                    </div>
-
-                    <div
-                      style={{
-                        color:
-                          'var(--color-muted)',
-                      }}
-                    >
-                      A hidden test case
-                      did not pass. Try
-                      to find edge cases
-                      in your logic.
-                    </div>
-                  </div>
-                ) : executionResult.failed_test_input && (
-                  <div
-                    style={{
-                      marginTop:
-                        '12px',
-                      background:
-                        'var(--color-surface-2)',
-                      padding:
-                        '12px',
-                      borderRadius:
-                        '4px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight:
-                          '600',
-                        color:
-                          'var(--color-text)',
-                        marginBottom:
-                          '8px',
-                      }}
-                    >
-                      Public Test Case Failed:
-                    </div>
-
-                    <div
-                      style={{
-                        marginBottom:
-                          '8px',
-                      }}
-                    >
-                      <span
+                      <div
                         style={{
+                          fontWeight:
+                            '600',
                           color:
-                            'var(--color-muted)',
-                        }}
-                      >
-                        Input:
-                      </span>
-
-                      <br />
-
-                      <pre
-                        style={{
-                          margin:
-                            '4px 0',
-                          padding:
+                            'var(--color-text)',
+                          marginBottom:
                             '8px',
                         }}
                       >
-                        {
-                          executionResult.failed_test_input
-                        }
-                      </pre>
-                    </div>
+                        Public Test Case Failed:
+                      </div>
 
-
-                    <div
-                      style={{
-                        marginBottom:
-                          '8px',
-                      }}
-                    >
-                      <span
+                      <div
                         style={{
-                          color:
-                            'var(--color-muted)',
-                        }}
-                      >
-                        Expected Output:
-                      </span>
-
-                      <br />
-
-                      <pre
-                        style={{
-                          margin:
-                            '4px 0',
-                          padding:
+                          marginBottom:
                             '8px',
                         }}
                       >
-                        {
-                          executionResult.failed_test_expected
-                        }
-                      </pre>
-                    </div>
-
-
-                    {executionResult.failed_test_actual && (
-                      <div>
                         <span
                           style={{
                             color:
                               'var(--color-muted)',
                           }}
                         >
-                          Actual Output:
+                          Input:
                         </span>
 
                         <br />
@@ -2737,17 +3201,78 @@ export default function CodingWorkspace({
                           }}
                         >
                           {
-                            executionResult.failed_test_actual
+                            executionResult.failed_test_input
                           }
                         </pre>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-        </div>
-      </footer>
+
+
+                      <div
+                        style={{
+                          marginBottom:
+                            '8px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            color:
+                              'var(--color-muted)',
+                          }}
+                        >
+                          Expected Output:
+                        </span>
+
+                        <br />
+
+                        <pre
+                          style={{
+                            margin:
+                              '4px 0',
+                            padding:
+                              '8px',
+                          }}
+                        >
+                          {
+                            executionResult.failed_test_expected
+                          }
+                        </pre>
+                      </div>
+
+
+                      {executionResult.failed_test_actual && (
+                        <div>
+                          <span
+                            style={{
+                              color:
+                                'var(--color-muted)',
+                            }}
+                          >
+                            Actual Output:
+                          </span>
+
+                          <br />
+
+                          <pre
+                            style={{
+                              margin:
+                                '4px 0',
+                              padding:
+                                '8px',
+                            }}
+                          >
+                            {
+                              executionResult.failed_test_actual
+                            }
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+          </div>
+        </section>
+      )}
 
 
       {showAiModal && (

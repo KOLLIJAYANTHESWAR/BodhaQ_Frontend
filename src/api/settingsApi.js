@@ -1,45 +1,61 @@
 import { get, post } from './client.js';
 
 /**
- * Test the backend Gemini AI configuration.
+ * Test the current Gemini BYOK configuration.
+ *
  * POST /api/settings/test-ai
  *
- * The Gemini API key is configured securely on the backend.
- * No API key is sent from the browser.
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Gemini API key
+ *
+ * The API client reads the Gemini key from sessionStorage
+ * and sends it through X-Gemini-API-Key.
  */
 export function testAiConnection() {
-  return post('/api/settings/test-ai', {});
+  return post(
+    '/api/settings/test-ai',
+    {},
+    {},
+    {
+      includeGeminiKey: true,
+    }
+  );
 }
-
 
 /**
- * Test the Tavily API configuration.
+ * Test the current Tavily BYOK configuration.
+ *
  * POST /api/settings/test-tavily
  *
- * The Tavily API key is sent only for the current test request.
- * It must never be persisted by the frontend API layer.
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Tavily API key
+ *
+ * The API client reads the Tavily key from sessionStorage
+ * and sends it through X-Tavily-API-Key.
+ *
+ * The API key is intentionally not included in the
+ * request body.
  */
-export function testTavilyConnection(apiKey) {
-  const normalizedKey =
-    typeof apiKey === 'string'
-      ? apiKey.trim()
-      : '';
-
-  if (!normalizedKey) {
-    return Promise.reject(
-      new Error('Tavily API key is required.')
-    );
-  }
-
-  return post('/api/settings/test-tavily', {
-    api_key: normalizedKey,
-  });
+export function testTavilyConnection() {
+  return post(
+    '/api/settings/test-tavily',
+    {},
+    {},
+    {
+      includeTavilyKey: true,
+    }
+  );
 }
-
 
 /**
  * Health check.
+ *
  * GET /health
+ *
+ * This endpoint is public and does not require
+ * a session or provider API key.
  */
 export function checkHealth() {
   return get('/health');

@@ -2,7 +2,15 @@ import { post } from './client.js';
 
 /**
  * Ask a doubt.
+ *
  * POST /api/doubts/ask
+ *
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Gemini API key
+ *
+ * Document mode additionally uses the session-scoped
+ * RAG pipeline when documentId is provided.
  *
  * @param {string} question
  * @param {string|null} documentId — omit for general mode
@@ -31,7 +39,10 @@ export function askDoubt(
     body.document_id = normalizedDocumentId;
   }
 
-  if (Array.isArray(history) && history.length > 0) {
+  if (
+    Array.isArray(history) &&
+    history.length > 0
+  ) {
     body.history = history
       .slice(-8)
       .filter(
@@ -49,5 +60,12 @@ export function askDoubt(
       }));
   }
 
-  return post('/api/doubts/ask', body);
+  return post(
+    '/api/doubts/ask',
+    body,
+    {},
+    {
+      includeGeminiKey: true,
+    }
+  );
 }

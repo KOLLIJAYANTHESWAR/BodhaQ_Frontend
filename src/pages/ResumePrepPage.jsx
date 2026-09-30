@@ -59,18 +59,17 @@ export default function ResumePrepPage() {
     setLoading(true);
 
     try {
-      let data = getActiveResume();
-
-      if (!data) {
-        data = await getResumeProgress();
-        if (data && data.resume_id) {
-          setActiveResume(data);
-        }
-      }
+      // The backend is the source of truth for the resume queue.
+      // Do not use the upload response or a stale localStorage snapshot
+      // as the progress object: /api/resume/upload returns upload metadata,
+      // while /api/resume/progress returns the extracted interview queue.
+      const data = await getResumeProgress();
 
       if (data && data.resume_id) {
         setProgressData(data);
+        setActiveResume(data);
       } else {
+        clearActiveResume();
         setProgressData(null);
       }
 
@@ -165,18 +164,47 @@ export default function ResumePrepPage() {
     try {
       const result = await uploadResume(file);
 
-      const currentResume = getActiveResume();
-      if (currentResume && currentResume.resume_id !== result.resume_id) {
-        const oldItems = [
-          ...(currentResume.skills || []),
-          ...(currentResume.projects || []),
-          ...(currentResume.certifications || [])
-        ];
-        oldItems.forEach(item => clearResumeQuizProgress(item.id));
+      if (!result) {
+        throw new Error(
+          'Resume upload completed without a valid response.'
+        );
       }
 
+      const currentResume =
+        getActiveResume() || progressData;
+
+      // Clear client-side quiz progress only when a different resume
+      // has been uploaded. The actual resume queue is reloaded from
+      // the backend immediately after the upload succeeds.
+      if (
+        currentResume &&
+        currentResume.resume_id &&
+        result.resume_id &&
+        currentResume.resume_id !== result.resume_id
+      ) {
+        const oldItems = [
+          ...(Array.isArray(currentResume.skills)
+            ? currentResume.skills
+            : []),
+          ...(Array.isArray(currentResume.projects)
+            ? currentResume.projects
+            : []),
+          ...(Array.isArray(currentResume.certifications)
+            ? currentResume.certifications
+            : []),
+        ];
+
+        oldItems.forEach((item) => {
+          if (item?.id) {
+            clearResumeQuizProgress(item.id);
+          }
+        });
+      }
+
+      // The upload response contains upload metadata. It is not the
+      // complete resume progress payload, so do not store it as the
+      // active resume. Fetch the authoritative queue next.
       clearActiveResume();
-      setActiveResume(result);
 
       await fetchProgress();
 
@@ -1192,14 +1220,13 @@ export default function ResumePrepPage() {
                     </li>
 
                     <li>
-                      Verify{' '}
-                      <code>GEMINI_API_KEY</code>
-                      {' '}is configured
+                      Verify that your Gemini API key is saved in
+                      <code> sessionStorage</code> for this browser session
                     </li>
 
                     <li>
-                      Restart FastAPI after changing
-                      the environment file
+                      Open Settings and use the Gemini connection test,
+                      then retry the resume upload
                     </li>
                   </ul>
 

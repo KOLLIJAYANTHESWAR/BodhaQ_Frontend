@@ -2,58 +2,163 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+
 import { useLocation } from 'react-router-dom';
+
 import CodingProblemInput from '../components/coding/CodingProblemInput';
 import CodingWorkspace from '../components/coding/CodingWorkspace';
+
 import {
   getCurrentWorkspace,
 } from '../utils/codingStorage';
 
 
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const IDE_MODE = 'ide';
+const AI_LEARN_MODE = 'ai-learn';
+
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function normalizeSourceMode(value) {
+  return value === AI_LEARN_MODE
+    ? AI_LEARN_MODE
+    : IDE_MODE;
+}
+
+
+function normalizeSavedCodeId(value) {
+  return typeof value === 'string' &&
+    value.trim()
+    ? value.trim()
+    : null;
+}
+
+
+function isValidObject(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  );
+}
+
+
+function isNewAiLearnWorkspace(state) {
+  return (
+    state?.isNew === true &&
+    normalizeSourceMode(
+      state?.sourceMode
+    ) === AI_LEARN_MODE
+  );
+}
+
+
+// ============================================================================
+// PAGE
+// ============================================================================
+
 export default function CodingWorkspacePage() {
   const location = useLocation();
 
-  const state = location.state || {};
+  const routerState =
+    isValidObject(location.state)
+      ? location.state
+      : {};
 
-  const [sourceMode, setSourceMode] =
-    useState(
-      state.sourceMode === 'ai-learn'
-        ? 'ai-learn'
-        : 'ide'
+
+  // ==========================================================================
+  // NORMALIZED ROUTER STATE
+  // ==========================================================================
+
+  const initialSourceMode =
+    normalizeSourceMode(
+      routerState.sourceMode
     );
 
-  const [savedCodeId, setSavedCodeId] =
-    useState(
-      typeof state.savedCodeId === 'string'
-        ? state.savedCodeId
-        : null
+  const initialSavedCodeId =
+    normalizeSavedCodeId(
+      routerState.savedCodeId
     );
 
-  // For AI Learn Code mode.
-  const [showInput, setShowInput] =
-    useState(
-      state.isNew === true &&
-      state.sourceMode === 'ai-learn'
+  const initialIsNewAiLearn =
+    isNewAiLearnWorkspace(
+      routerState
     );
 
-  const [problemData, setProblemData] =
-    useState(null);
+
+  // ==========================================================================
+  // STATE
+  // ==========================================================================
+
+  const [
+    sourceMode,
+    setSourceMode,
+  ] = useState(
+    initialSourceMode
+  );
 
 
-  // ========================================================================
+  const [
+    savedCodeId,
+    setSavedCodeId,
+  ] = useState(
+    initialSavedCodeId
+  );
+
+
+  /*
+   * CodingProblemInput is only used when
+   * creating a NEW AI Learn problem.
+   *
+   * IDE mode never displays this screen.
+   */
+  const [
+    showInput,
+    setShowInput,
+  ] = useState(
+    initialIsNewAiLearn
+  );
+
+
+  /*
+   * Generated/restored problem data.
+   *
+   * This is intentionally kept separate from
+   * savedCodeId so CodingWorkspace can decide
+   * how to initialize its own internal state.
+   */
+  const [
+    problemData,
+    setProblemData,
+  ] = useState(null);
+
+
+  // ==========================================================================
   // ROUTER STATE SYNCHRONIZATION
-  // ========================================================================
+  // ==========================================================================
 
   useEffect(() => {
     const nextSourceMode =
-      state.sourceMode === 'ai-learn'
-        ? 'ai-learn'
-        : 'ide';
+      normalizeSourceMode(
+        routerState.sourceMode
+      );
 
     const nextSavedCodeId =
-      typeof state.savedCodeId === 'string'
-        ? state.savedCodeId
-        : null;
+      normalizeSavedCodeId(
+        routerState.savedCodeId
+      );
+
+    const newAiLearnWorkspace =
+      isNewAiLearnWorkspace(
+        routerState
+      );
+
 
     setSourceMode(
       nextSourceMode
@@ -63,124 +168,185 @@ export default function CodingWorkspacePage() {
       nextSavedCodeId
     );
 
-    if (
-      state.isNew === true &&
-      nextSourceMode === 'ai-learn'
-    ) {
+
+    /*
+     * A NEW AI Learn workspace must always
+     * start clean.
+     *
+     * Never restore an old workspace here.
+     */
+    if (newAiLearnWorkspace) {
       setShowInput(true);
       setProblemData(null);
+
       return;
     }
 
+
+    /*
+     * Existing workspaces open directly in
+     * CodingWorkspace.
+     */
     setShowInput(false);
+
   }, [
-    state.sourceMode,
-    state.savedCodeId,
-    state.isNew,
+    routerState.sourceMode,
+    routerState.savedCodeId,
+    routerState.isNew,
   ]);
 
 
-  // ========================================================================
+  // ==========================================================================
   // CURRENT WORKSPACE RESTORATION
-  // ========================================================================
+  // ==========================================================================
 
   useEffect(() => {
     /*
-     * Do not restore an old workspace when the user explicitly selected
-     * "New" AI Learn Code mode.
+     * Never restore a previous workspace when
+     * explicitly creating a new AI Learn problem.
      */
     if (
-      state.isNew === true &&
-      state.sourceMode === 'ai-learn'
+      isNewAiLearnWorkspace(
+        routerState
+      )
     ) {
       return;
     }
 
+
     /*
-     * CodingWorkspace already receives savedCodeId when opening a saved
-     * coding item. There is therefore nothing else to restore here.
+     * Saved coding items already provide their
+     * savedCodeId to CodingWorkspace.
+     */
+    if (savedCodeId) {
+      return;
+    }
+
+
+    /*
+     * A generated/restored problem is already
+     * available.
+     */
+    if (problemData) {
+      return;
+    }
+
+
+    /*
+     * Current-workspace restoration is primarily
+     * for the normal IDE workflow.
      *
-     * For a normal IDE refresh, try to recover the current workspace.
+     * Do not inject an old workspace into an
+     * AI Learn route.
      */
     if (
-      savedCodeId ||
-      problemData
+      sourceMode !== IDE_MODE
     ) {
       return;
     }
+
 
     try {
       const currentWorkspace =
         getCurrentWorkspace();
 
-      if (!currentWorkspace) {
-        return;
-      }
 
-      /*
-       * Only use stored workspace data when it contains enough information
-       * to represent an actual coding workspace.
-       */
       if (
-        typeof currentWorkspace !== 'object'
+        !isValidObject(
+          currentWorkspace
+        )
       ) {
         return;
       }
 
+
+      /*
+       * Support the existing storage formats
+       * without changing the storage contract.
+       */
       const restoredProblem =
         currentWorkspace.problem ||
         currentWorkspace.initialProblem ||
         currentWorkspace.problemData ||
         null;
 
+
       if (
-        restoredProblem &&
-        typeof restoredProblem === 'object'
+        isValidObject(
+          restoredProblem
+        )
       ) {
         setProblemData(
           restoredProblem
         );
       }
-    } catch (error) {
-      console.error(
-        '[CodingWorkspacePage] Failed to restore current workspace:',
-        error
-      );
+
+    } catch {
+      /*
+       * Workspace restoration is best-effort.
+       *
+       * Do not expose internal storage details
+       * to the production console.
+       */
     }
+
   }, [
     savedCodeId,
     problemData,
-    state.isNew,
-    state.sourceMode,
+    sourceMode,
+    routerState.isNew,
+    routerState.sourceMode,
   ]);
 
 
-  // ========================================================================
+  // ==========================================================================
   // AI GENERATION
-  // ========================================================================
+  // ==========================================================================
 
   const handleGenerateWorkspace = (
     data
   ) => {
+    /*
+     * Do not enter the workspace with an
+     * invalid generated response.
+     */
     if (
-      !data ||
-      typeof data !== 'object'
+      !isValidObject(data)
     ) {
       return;
     }
 
-    setProblemData(data);
-    setSourceMode('ai-learn');
-    setSavedCodeId(null);
-    setShowInput(false);
+
+    setProblemData(
+      data
+    );
+
+    /*
+     * Generation always creates a new
+     * AI Learn workspace.
+     */
+    setSourceMode(
+      AI_LEARN_MODE
+    );
+
+    setSavedCodeId(
+      null
+    );
+
+    setShowInput(
+      false
+    );
   };
 
 
-  // ========================================================================
-  // RENDER
-  // ========================================================================
+  // ==========================================================================
+  // RENDER — NEW AI LEARN INPUT
+  // ==========================================================================
 
-  if (showInput) {
+  if (
+    showInput &&
+    sourceMode === AI_LEARN_MODE
+  ) {
     return (
       <CodingProblemInput
         onGenerate={
@@ -190,6 +356,10 @@ export default function CodingWorkspacePage() {
     );
   }
 
+
+  // ==========================================================================
+  // RENDER — CODING WORKSPACE
+  // ==========================================================================
 
   return (
     <CodingWorkspace

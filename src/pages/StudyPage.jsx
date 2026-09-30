@@ -566,9 +566,18 @@ export default function StudyPage() {
                         style={{
                           marginBottom: 16,
                           overflowX: 'auto',
+                          background:
+                            'var(--color-code-bg)',
+                          color:
+                            'var(--color-code-text, var(--color-text))',
                         }}
                       >
-                        <code>
+                        <code
+                          style={{
+                            color:
+                              'var(--color-code-text, var(--color-text))',
+                          }}
+                        >
                           {example.code}
                         </code>
                       </pre>

@@ -4,14 +4,17 @@ import {
   postForm,
 } from './client.js';
 
-
 /**
  * Upload a resume.
  *
  * POST /api/resume/upload
  *
- * Gemini authentication is handled exclusively by the backend.
- * No Gemini API key is sent from the browser.
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Gemini API key
+ *
+ * The Gemini key is attached by the API client only
+ * for this Gemini-dependent request.
  */
 export function uploadResume(file) {
   if (!(file instanceof File)) {
@@ -30,28 +33,40 @@ export function uploadResume(file) {
 
   return postForm(
     '/api/resume/upload',
-    formData
+    formData,
+    {},
+    {
+      includeGeminiKey: true,
+    }
   );
 }
-
 
 /**
  * Get the latest resume preparation progress.
  *
  * GET /api/resume/progress
+ *
+ * Requires:
+ * - Anonymous BodhaQ session
+ *
+ * Gemini is not required because this endpoint
+ * reads session-owned resume state.
  */
 export function getResumeProgress() {
   return get('/api/resume/progress');
 }
-
 
 /**
  * Generate an interview assessment for a resume item.
  *
  * POST /api/resume/quiz/generate
  *
- * The backend already knows the resume item and uses
- * the centralized GeminiService for AI generation.
+ * Requires:
+ * - Anonymous BodhaQ session
+ * - Gemini API key
+ *
+ * The backend uses the centralized GeminiService
+ * for AI-generated assessment questions.
  */
 export function generateResumeQuiz(
   itemId,
@@ -116,10 +131,13 @@ export function generateResumeQuiz(
       item_id: normalizedItemId,
       difficulty: normalizedDifficulty,
       number_of_questions: numQuestions,
+    },
+    {},
+    {
+      includeGeminiKey: true,
     }
   );
 }
-
 
 /**
  * Submit a resume interview assessment.
@@ -127,7 +145,7 @@ export function generateResumeQuiz(
  * POST /api/resume/quiz/submit
  *
  * Scoring is performed by the backend evaluation service.
- * Gemini is NOT required for deterministic scoring.
+ * Gemini is not required for deterministic scoring.
  */
 export function submitResumeQuiz(
   quizId,

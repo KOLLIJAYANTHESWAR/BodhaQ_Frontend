@@ -7,7 +7,15 @@ const navItems = [
     label: 'Home',
     exact: true,
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         <polyline points="9 22 9 12 15 12 15 22" />
       </svg>
@@ -17,7 +25,15 @@ const navItems = [
     to: '/study',
     label: 'Study',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" />
         <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
       </svg>
@@ -27,7 +43,15 @@ const navItems = [
     to: '/materials',
     label: 'Materials',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
         <polyline points="14 2 14 8 20 8" />
         <line x1="16" y1="13" x2="8" y2="13" />
@@ -40,7 +64,15 @@ const navItems = [
     to: '/quizzes',
     label: 'Quiz & Practice',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <circle cx="12" cy="12" r="10" />
         <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
         <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -51,7 +83,15 @@ const navItems = [
     to: '/weak-topics',
     label: 'Learning Gaps',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
       </svg>
     ),
@@ -60,7 +100,15 @@ const navItems = [
     to: '/resume-prep',
     label: 'Resume Prep',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
         <path d="M14 2v6h6" />
         <line x1="16" y1="13" x2="8" y2="13" />
@@ -73,7 +121,15 @@ const navItems = [
     to: '/doubts',
     label: 'Doubts',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
       </svg>
     ),
@@ -82,7 +138,15 @@ const navItems = [
     to: '/coding',
     label: 'Coding',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <polyline points="16 18 22 12 16 6" />
         <polyline points="8 6 2 12 8 18" />
       </svg>
@@ -92,7 +156,15 @@ const navItems = [
     to: '/settings',
     label: 'Settings',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <circle cx="12" cy="12" r="3" />
         <path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14" />
         <path d="M12 2v2M12 20v2M2 12h2M20 12h2" />
@@ -122,10 +194,12 @@ export default function Sidebar({ mobileOpen, onClose }) {
   function toggleCollapse() {
     setCollapsed((current) => {
       const next = !current;
+
       localStorage.setItem(
         'bodhaq_sidebar_collapsed',
         String(next)
       );
+
       return next;
     });
   }
@@ -154,8 +228,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
         to={item.to}
         end={item.exact}
         className={({ isActive: routerActive }) =>
-          `nav-item ${routerActive || active ? 'active' : ''
-          }`
+          `nav-item ${routerActive || active ? 'active' : ''}`
         }
         onClick={onClose}
         aria-current={active ? 'page' : undefined}
@@ -175,15 +248,14 @@ export default function Sidebar({ mobileOpen, onClose }) {
   return (
     <>
       <div
-        className={`sidebar-overlay ${mobileOpen ? 'active' : ''
-          }`}
+        className={`sidebar-overlay ${mobileOpen ? 'active' : ''}`}
         onClick={onClose}
         aria-hidden="true"
       />
 
       <nav
-        className={`app-sidebar ${mobileOpen ? 'mobile-open' : ''
-          } ${collapsed ? 'collapsed' : ''}`}
+        className={`app-sidebar ${mobileOpen ? 'mobile-open' : ''} ${collapsed ? 'collapsed' : ''
+          }`}
         aria-label="Main navigation"
       >
         <div className="sidebar-brand">
@@ -259,20 +331,23 @@ export function MobileBottomNav() {
       aria-label="Mobile navigation"
     >
       {mobileNavItems.map((item) => {
-        const active = item.exact
-          ? location.pathname === item.to
-          : location.pathname.startsWith(item.to);
+        const active =
+          item.exact
+            ? location.pathname === item.to
+            : item.to === '/weak-topics'
+              ? (
+                location.pathname.startsWith('/weak-topics') ||
+                location.pathname.startsWith('/practice')
+              )
+              : location.pathname.startsWith(item.to);
 
         return (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.exact}
-            className={`bottom-nav-item ${active ? 'active' : ''
-              }`}
-            aria-current={
-              active ? 'page' : undefined
-            }
+            className={`bottom-nav-item ${active ? 'active' : ''}`}
+            aria-current={active ? 'page' : undefined}
           >
             {item.icon}
             <span>{item.label}</span>

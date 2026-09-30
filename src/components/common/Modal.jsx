@@ -1,13 +1,17 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
 /**
  * Accessible modal dialog.
  */
 export default function Modal({ isOpen, onClose, title, children }) {
   const titleId = useId();
+  const modalRef = useRef(null);
+  const previousActiveElementRef = useRef(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
+
+    previousActiveElementRef.current = document.activeElement;
 
     const handleKey = (e) => {
       if (e.key === 'Escape') {
@@ -17,8 +21,17 @@ export default function Modal({ isOpen, onClose, title, children }) {
 
     document.addEventListener('keydown', handleKey);
 
+    // Move focus into the dialog for keyboard accessibility.
+    requestAnimationFrame(() => {
+      modalRef.current?.focus();
+    });
+
     return () => {
       document.removeEventListener('keydown', handleKey);
+
+      // Restore focus to the element that opened the modal.
+      previousActiveElementRef.current?.focus?.();
+      previousActiveElementRef.current = null;
     };
   }, [isOpen, onClose]);
 
@@ -36,7 +49,11 @@ export default function Modal({ isOpen, onClose, title, children }) {
         }
       }}
     >
-      <div className="modal">
+      <div
+        ref={modalRef}
+        className="modal"
+        tabIndex={-1}
+      >
         {title && (
           <h2
             id={titleId}

@@ -1,20 +1,21 @@
 /**
  * BodhaQ API Client
  *
- * Centralises:
- * - Base URL
- * - Anonymous session creation and session headers
- * - BYOK Gemini/Tavily request headers
- * - JSON parsing
+ * Responsibilities:
+ * - Central API base URL
+ * - Anonymous session management
+ * - Session authentication headers
+ * - Optional BYOK Gemini/Tavily headers
+ * - JSON requests
  * - Multipart requests
- * - HTTP error handling
+ * - Backend error normalization
  *
  * Security model:
- * - Gemini/Tavily API keys are stored only in sessionStorage.
- * - API keys are sent to the backend only through request headers.
- * - API keys are never persisted in the database by the backend.
- * - API keys are never logged by this client.
- * - Closing the browser tab/session clears sessionStorage.
+ * - Session credentials are stored only in sessionStorage.
+ * - Gemini/Tavily keys are stored only in sessionStorage.
+ * - Provider keys are sent only when explicitly required by an API call.
+ * - Provider keys are never stored by the backend.
+ * - Provider keys are never logged by this client.
  */
 
 const API_BASE = (
@@ -26,15 +27,13 @@ const GEMINI_API_KEY_STORAGE = 'bodhaq_user_api_key';
 const TAVILY_API_KEY_STORAGE = 'bodhaq_tavily_api_key';
 
 const SESSION_ENDPOINT = '/api/session';
+
 const PUBLIC_PATHS = new Set([
   '/',
   '/health',
   SESSION_ENDPOINT,
 ]);
 
-/**
- * Map known backend error codes to user-friendly messages.
- */
 const ERROR_MESSAGES = {
   AI_AUTHENTICATION_FAILED:
     'BodhaQ could not authenticate with Gemini. Please check your Gemini API key.',
@@ -62,6 +61,15 @@ const ERROR_MESSAGES = {
 
   INVALID_API_KEY:
     'The API key could not be verified. Please check your API key and try again.',
+
+  TAVILY_AUTHENTICATION_FAILED:
+    'BodhaQ could not authenticate with Tavily. Please check your Tavily API key.',
+
+  TAVILY_SERVICE_UNAVAILABLE:
+    'BodhaQ could not reach Tavily right now. Please try again later.',
+
+  TAVILY_RATE_LIMITED:
+    'Tavily rate limit reached. Please wait a moment and try again.',
 
   RATE_LIMITED:
     'The AI service rate limit was reached. Please wait a moment and try again.',
@@ -99,52 +107,49 @@ const ERROR_MESSAGES = {
 
 
 /**
- * Safely read a value from sessionStorage.
- *
- * sessionStorage can theoretically be unavailable in some
- * browser/privacy configurations, so storage access is guarded.
+ * Safely read from sessionStorage.
  */
 function readSessionStorage(key) {
   try {
     return sessionStorage.getItem(key) || '';
-  } catch (_) {
+  } catch {
     return '';
   }
 }
 
 
 /**
- * Safely write a value to sessionStorage.
+ * Safely write to sessionStorage.
  */
 function writeSessionStorage(key, value) {
   try {
     sessionStorage.setItem(key, value);
-  } catch (_) {
-    /*
-     * Do not expose storage internals to the user.
-     * Requests will simply fail normally if the browser
-     * does not allow sessionStorage.
-     */
+    return true;
+  } catch {
+    return false;
   }
 }
 
 
 /**
- * Safely remove a value from sessionStorage.
+ * Safely remove from sessionStorage.
  */
 function removeSessionStorage(key) {
   try {
     sessionStorage.removeItem(key);
-  } catch (_) {
-    /*
-     * Ignore storage cleanup failures.
-     */
+  } catch {
+    // Ignore storage cleanup failures.
   }
 }
 
 
 /**
- * Build JSON request headers.
+ * Build standard JSON headers.
+ *
+ * IMPORTANT:
+ * This helper is only used for JSON requests.
+ * Multipart requests must bypass the JSON Content-Type header
+ * so that the browser can generate the multipart boundary.
  */
 function buildHeaders(extra = {}) {
   return {
@@ -156,44 +161,54 @@ function buildHeaders(extra = {}) {
 
 
 /**
- * Build request headers that include the current
- * BodhaQ anonymous session and BYOK credentials.
+ * Build headers for protected requests.
  *
- * Explicit headers passed by a caller take precedence.
+ * The session token is attached automatically.
+ * Provider keys are attached only when explicitly requested.
+ *
+ * `isMultipart` is used to prevent this function from adding
+ * `Content-Type: application/json` to FormData requests.
  */
-function buildAuthenticatedHeaders(extra = {}) {
+function buildAuthenticatedHeaders({
+  includeGeminiKey = false,
+  includeTavilyKey = false,
+  extra = {},
+  isMultipart = false,
+} = {}) {
+  const headers = isMultipart
+    ? {
+      Accept: 'application/json',
+    }
+    : buildHeaders();
+
   const sessionToken = readSessionStorage(
     SESSION_STORAGE_KEY
   );
-
-  const geminiApiKey = readSessionStorage(
-    GEMINI_API_KEY_STORAGE
-  );
-
-  const tavilyApiKey = readSessionStorage(
-    TAVILY_API_KEY_STORAGE
-  );
-
-  const headers = {
-    ...buildHeaders(),
-  };
 
   if (sessionToken) {
     headers['X-BodhaQ-Session'] = sessionToken;
   }
 
-  if (geminiApiKey) {
-    headers['X-Gemini-API-Key'] = geminiApiKey;
+  if (includeGeminiKey) {
+    const geminiApiKey = readSessionStorage(
+      GEMINI_API_KEY_STORAGE
+    );
+
+    if (geminiApiKey) {
+      headers['X-Gemini-API-Key'] = geminiApiKey;
+    }
   }
 
-  if (tavilyApiKey) {
-    headers['X-Tavily-API-Key'] = tavilyApiKey;
+  if (includeTavilyKey) {
+    const tavilyApiKey = readSessionStorage(
+      TAVILY_API_KEY_STORAGE
+    );
+
+    if (tavilyApiKey) {
+      headers['X-Tavily-API-Key'] = tavilyApiKey;
+    }
   }
 
-  /*
-   * Explicit caller headers override automatically
-   * generated headers.
-   */
   return {
     ...headers,
     ...extra,
@@ -202,13 +217,7 @@ function buildAuthenticatedHeaders(extra = {}) {
 
 
 /**
- * Safely convert any backend error value into a string.
- *
- * Prevents values such as:
- *
- *     [object Object]
- *
- * from appearing in the UI.
+ * Convert arbitrary backend error data into readable text.
  */
 function stringifyError(value) {
   if (value === null || value === undefined) {
@@ -223,6 +232,34 @@ function stringifyError(value) {
     return value.message;
   }
 
+  if (Array.isArray(value)) {
+    const messages = value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+
+        if (
+          item &&
+          typeof item.msg === 'string'
+        ) {
+          return item.msg;
+        }
+
+        if (
+          item &&
+          typeof item.message === 'string'
+        ) {
+          return item.message;
+        }
+
+        return '';
+      })
+      .filter(Boolean);
+
+    return messages.join(' ');
+  }
+
   if (typeof value === 'object') {
     if (typeof value.error === 'string') {
       return value.error;
@@ -232,52 +269,9 @@ function stringifyError(value) {
       return value.message;
     }
 
-    /*
-     * FastAPI validation errors commonly return:
-     *
-     * {
-     *   "detail": [
-     *     {
-     *       "loc": [...],
-     *       "msg": "...",
-     *       "type": "..."
-     *     }
-     *   ]
-     * }
-     */
-    if (Array.isArray(value)) {
-      const messages = value
-        .map((item) => {
-          if (typeof item === 'string') {
-            return item;
-          }
-
-          if (
-            item &&
-            typeof item.msg === 'string'
-          ) {
-            return item.msg;
-          }
-
-          if (
-            item &&
-            typeof item.message === 'string'
-          ) {
-            return item.message;
-          }
-
-          return '';
-        })
-        .filter(Boolean);
-
-      if (messages.length > 0) {
-        return messages.join(' ');
-      }
-    }
-
     try {
       return JSON.stringify(value);
-    } catch (_) {
+    } catch {
       return 'Unknown server error.';
     }
   }
@@ -287,40 +281,41 @@ function stringifyError(value) {
 
 
 /**
- * Return a user-friendly error message.
+ * Convert a backend error code into a user-facing message.
+ *
+ * Known errors use controlled frontend messages.
+ * Unknown backend messages are preserved when available.
  */
 function friendlyError(code, fallback) {
+  if (code && ERROR_MESSAGES[code]) {
+    return ERROR_MESSAGES[code];
+  }
+
+  const message = stringifyError(fallback);
+
   return (
-    ERROR_MESSAGES[code] ||
-    stringifyError(fallback) ||
+    message ||
     'Something went wrong. Please try again.'
   );
 }
 
 
 /**
- * Extract an error code and message from a FastAPI response.
+ * Extract a normalized error from a FastAPI response.
  */
 function parseBackendError(errorData, status) {
   const detail = errorData?.detail ?? null;
 
-  /*
-   * Current BodhaQ backend commonly returns:
-   *
-   * detail: {
-   *   error: "...",
-   *   code: "..."
-   * }
-   */
   if (
     detail &&
     typeof detail === 'object' &&
     !Array.isArray(detail)
   ) {
-    const code =
+    const code = String(
       detail.code ||
       errorData?.code ||
-      'UNKNOWN_ERROR';
+      'UNKNOWN_ERROR'
+    );
 
     const message =
       detail.error ||
@@ -329,58 +324,47 @@ function parseBackendError(errorData, status) {
       `HTTP ${status}`;
 
     return {
-      code: String(code),
+      code,
       message: friendlyError(code, message),
     };
   }
 
-  /*
-   * FastAPI validation errors may return:
-   *
-   * detail: [...]
-   */
   if (Array.isArray(detail)) {
-    return {
-      code:
-        errorData?.code ||
-        'INVALID_REQUEST',
+    const code = String(
+      errorData?.code ||
+      'INVALID_REQUEST'
+    );
 
+    return {
+      code,
       message: friendlyError(
-        errorData?.code ||
-        'INVALID_REQUEST',
+        code,
         stringifyError(detail)
       ),
     };
   }
 
-  /*
-   * Some endpoints may return:
-   *
-   * detail: "some message"
-   */
   if (typeof detail === 'string') {
-    return {
-      code:
-        errorData?.code ||
-        'UNKNOWN_ERROR',
+    const code = String(
+      errorData?.code ||
+      'UNKNOWN_ERROR'
+    );
 
-      message: friendlyError(
-        errorData?.code ||
-        'UNKNOWN_ERROR',
-        detail
-      ),
+    return {
+      code,
+      message: friendlyError(code, detail),
     };
   }
 
+  const code = String(
+    errorData?.code ||
+    'UNKNOWN_ERROR'
+  );
+
   return {
-    code:
-      errorData?.code ||
-      'UNKNOWN_ERROR',
-
+    code,
     message: friendlyError(
-      errorData?.code ||
-      'UNKNOWN_ERROR',
-
+      code,
       errorData?.message ||
       `HTTP ${status}`
     ),
@@ -389,23 +373,41 @@ function parseBackendError(errorData, status) {
 
 
 /**
- * Determine whether the path is public and therefore
- * does not need an anonymous session.
+ * Normalize an API path.
  */
-function isPublicPath(path) {
-  const normalizedPath = path.startsWith('/')
+function normalizePath(path) {
+  if (
+    typeof path !== 'string' ||
+    !path.trim()
+  ) {
+    const err = new Error(
+      'Invalid API request path.'
+    );
+
+    err.code = 'INVALID_REQUEST';
+    err.status = 0;
+
+    throw err;
+  }
+
+  return path.startsWith('/')
     ? path
     : `/${path}`;
+}
 
-  return PUBLIC_PATHS.has(normalizedPath);
+
+/**
+ * Determine whether an endpoint is public.
+ */
+function isPublicPath(path) {
+  return PUBLIC_PATHS.has(
+    normalizePath(path)
+  );
 }
 
 
 /**
  * Create a new anonymous BodhaQ session.
- *
- * This is intentionally the only request that does not
- * require an existing session token.
  */
 async function createSession() {
   let response;
@@ -423,7 +425,7 @@ async function createSession() {
     );
   } catch (error) {
     const err = new Error(
-      'Unable to connect to the BodhaQ backend. Make sure the backend server is running.'
+      ERROR_MESSAGES.NETWORK_ERROR
     );
 
     err.code = 'NETWORK_ERROR';
@@ -438,10 +440,8 @@ async function createSession() {
 
     try {
       errorData = await response.json();
-    } catch (_) {
-      /*
-       * Backend did not return JSON.
-       */
+    } catch {
+      // Backend returned a non-JSON error.
     }
 
     const parsed = parseBackendError(
@@ -449,9 +449,7 @@ async function createSession() {
       response.status
     );
 
-    const err = new Error(
-      parsed.message
-    );
+    const err = new Error(parsed.message);
 
     err.code = parsed.code;
     err.status = response.status;
@@ -464,7 +462,7 @@ async function createSession() {
 
   try {
     data = await response.json();
-  } catch (_) {
+  } catch {
     const err = new Error(
       'The server returned an invalid session response.'
     );
@@ -477,6 +475,8 @@ async function createSession() {
 
   if (
     !data ||
+    typeof data.session_id !== 'string' ||
+    !data.session_id.trim() ||
     typeof data.session_token !== 'string' ||
     !data.session_token.trim()
   ) {
@@ -490,24 +490,35 @@ async function createSession() {
     throw err;
   }
 
-  writeSessionStorage(
+  const stored = writeSessionStorage(
     SESSION_STORAGE_KEY,
     data.session_token
   );
+
+  if (!stored) {
+    const err = new Error(
+      'BodhaQ could not initialize browser session storage.'
+    );
+
+    err.code = 'INVALID_RESPONSE';
+    err.status = 0;
+
+    throw err;
+  }
 
   return data.session_token;
 }
 
 
 /**
- * Ensure that the browser has a valid BodhaQ session.
- *
- * Multiple components can request data during initial
- * application startup. A shared promise prevents them
- * from creating multiple sessions simultaneously.
+ * Prevent multiple simultaneous session creation requests.
  */
 let sessionPromise = null;
 
+
+/**
+ * Ensure that an anonymous session exists.
+ */
 async function ensureSession() {
   const existingToken = readSessionStorage(
     SESSION_STORAGE_KEY
@@ -518,10 +529,9 @@ async function ensureSession() {
   }
 
   if (!sessionPromise) {
-    sessionPromise = createSession()
-      .finally(() => {
-        sessionPromise = null;
-      });
+    sessionPromise = createSession().finally(() => {
+      sessionPromise = null;
+    });
   }
 
   return sessionPromise;
@@ -529,7 +539,7 @@ async function ensureSession() {
 
 
 /**
- * Clear the current session token.
+ * Clear the current anonymous session.
  */
 function clearSession() {
   removeSessionStorage(
@@ -541,54 +551,57 @@ function clearSession() {
 /**
  * Core HTTP request function.
  *
- * Throws:
+ * options may contain:
  *
- *     Error {
- *       message,
- *       code,
- *       status,
- *       details
- *     }
+ * {
+ *   method,
+ *   headers,
+ *   body,
+ *   includeGeminiKey,
+ *   includeTavilyKey
+ * }
  */
 async function request(
   path,
   options = {},
   retryAfterSessionRefresh = true
 ) {
-  if (
-    typeof path !== 'string' ||
-    !path.trim()
-  ) {
-    const err = new Error(
-      'Invalid API request path.'
-    );
-
-    err.code = 'INVALID_REQUEST';
-    err.status = 0;
-
-    throw err;
-  }
-
-  const normalizedPath = path.startsWith('/')
-    ? path
-    : `/${path}`;
+  const normalizedPath = normalizePath(path);
 
   const publicPath = isPublicPath(
     normalizedPath
   );
 
-  /*
-   * Protected API requests require an anonymous session.
-   *
-   * /api/session itself is excluded to avoid recursion.
-   */
+  const {
+    includeGeminiKey = false,
+    includeTavilyKey = false,
+    headers: requestHeaders = {},
+    ...fetchOptions
+  } = options;
+
+  const isMultipart =
+    typeof FormData !== 'undefined' &&
+    fetchOptions.body instanceof FormData;
+
   if (!publicPath) {
     await ensureSession();
   }
 
-  const automaticHeaders = publicPath
-    ? buildHeaders()
-    : buildAuthenticatedHeaders();
+  const headers = publicPath
+    ? (
+      isMultipart
+        ? {
+          Accept: 'application/json',
+          ...requestHeaders,
+        }
+        : buildHeaders(requestHeaders)
+    )
+    : buildAuthenticatedHeaders({
+      includeGeminiKey,
+      includeTavilyKey,
+      extra: requestHeaders,
+      isMultipart,
+    });
 
   const url = `${API_BASE}${normalizedPath}`;
 
@@ -596,15 +609,12 @@ async function request(
 
   try {
     response = await fetch(url, {
-      ...options,
-      headers: {
-        ...automaticHeaders,
-        ...(options.headers || {}),
-      },
+      ...fetchOptions,
+      headers,
     });
   } catch (error) {
     const err = new Error(
-      'Unable to connect to the BodhaQ backend. Make sure the backend server is running.'
+      ERROR_MESSAGES.NETWORK_ERROR
     );
 
     err.code = 'NETWORK_ERROR';
@@ -614,13 +624,9 @@ async function request(
     throw err;
   }
 
-
-  /*
-   * If the anonymous session is invalid or expired,
-   * create one new session and retry the original
-   * request exactly once.
-   *
-   * This prevents infinite retry loops.
+  /**
+   * Retry exactly once when the anonymous session
+   * has expired or become invalid.
    */
   if (
     response.status === 401 &&
@@ -631,10 +637,8 @@ async function request(
 
     try {
       errorData = await response.json();
-    } catch (_) {
-      /*
-       * Non-JSON 401 response.
-       */
+    } catch {
+      // Non-JSON 401 response.
     }
 
     const parsed = parseBackendError(
@@ -654,12 +658,6 @@ async function request(
       );
     }
 
-    /*
-     * The 401 was caused by something other than
-     * the anonymous session, such as an invalid BYOK key.
-     * Continue through normal error handling below.
-     */
-
     const err = new Error(
       parsed.message
     );
@@ -671,17 +669,13 @@ async function request(
     throw err;
   }
 
-
   if (!response.ok) {
     let errorData = null;
 
     try {
       errorData = await response.json();
-    } catch (_) {
-      /*
-       * Backend did not return JSON.
-       * The HTTP status will be used below.
-       */
+    } catch {
+      // Backend did not return JSON.
     }
 
     const parsed = parseBackendError(
@@ -695,39 +689,23 @@ async function request(
 
     err.code = parsed.code;
     err.status = response.status;
-
-    /*
-     * Preserve the original backend response for
-     * debugging without displaying it automatically.
-     *
-     * This response should never contain API keys because
-     * the backend must not return them.
-     */
     err.details = errorData;
 
     throw err;
   }
 
-
-  /*
-   * 204 No Content
+  /**
+   * 204 No Content.
    */
   if (response.status === 204) {
     return null;
   }
 
-
-  /*
-   * Some successful endpoints may legitimately return
-   * an empty body. Read the response as text first so that
-   * an empty successful response does not become an
-   * "invalid response" error.
-   */
   let responseText;
 
   try {
     responseText = await response.text();
-  } catch (_) {
+  } catch {
     const err = new Error(
       'Unable to read the server response.'
     );
@@ -738,17 +716,15 @@ async function request(
     throw err;
   }
 
-
   if (!responseText.trim()) {
     return null;
   }
 
-
   try {
     return JSON.parse(responseText);
-  } catch (_) {
+  } catch {
     const err = new Error(
-      'The server returned an invalid response.'
+      ERROR_MESSAGES.INVALID_RESPONSE
     );
 
     err.code = 'INVALID_RESPONSE';
@@ -761,83 +737,84 @@ async function request(
 
 /**
  * GET request.
- *
- * Optional headers allow individual callers to override
- * or add request-specific headers.
  */
 export function get(
   path,
-  headers = {}
+  headers = {},
+  options = {}
 ) {
-  return request(
-    path,
-    {
-      method: 'GET',
-      headers,
-    }
-  );
+  return request(path, {
+    ...options,
+    method: 'GET',
+    headers,
+  });
 }
 
 
 /**
- * POST request with JSON body.
+ * POST JSON request.
  *
- * Optional headers support request-scoped BYOK keys
- * and other endpoint-specific headers.
+ * By default, only the session token is sent.
+ *
+ * Set:
+ *
+ * {
+ *   includeGeminiKey: true
+ * }
+ *
+ * or:
+ *
+ * {
+ *   includeTavilyKey: true
+ * }
+ *
+ * when the endpoint requires that provider key.
  */
 export function post(
   path,
   body = {},
-  headers = {}
+  headers = {},
+  options = {}
 ) {
-  return request(
-    path,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body: JSON.stringify(body),
-    }
-  );
+  return request(path, {
+    ...options,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 
 /**
  * DELETE request.
- *
- * Optional headers allow individual callers to override
- * or add request-specific headers.
  */
 export function del(
   path,
-  headers = {}
+  headers = {},
+  options = {}
 ) {
-  return request(
-    path,
-    {
-      method: 'DELETE',
-      headers,
-    }
-  );
+  return request(path, {
+    ...options,
+    method: 'DELETE',
+    headers,
+  });
 }
 
 
 /**
  * POST multipart/form-data.
  *
- * Content-Type is intentionally NOT set.
- * The browser automatically generates the correct
- * multipart boundary for FormData.
- *
- * Session and BYOK headers are still automatically added
- * by the core request function.
+ * Content-Type is intentionally not set because
+ * the browser must generate the multipart boundary.
  */
 export function postForm(
   path,
   formData,
-  headers = {}
+  headers = {},
+  options = {}
 ) {
   if (!(formData instanceof FormData)) {
     const err = new Error(
@@ -850,24 +827,15 @@ export function postForm(
     return Promise.reject(err);
   }
 
-  return request(
-    path,
-    {
-      method: 'POST',
-      headers,
-      body: formData,
-    }
-  );
+  return request(path, {
+    ...options,
+    method: 'POST',
+    headers,
+    body: formData,
+  });
 }
 
 
-/**
- * Expose the session helpers only when explicitly needed
- * by the application.
- *
- * Most pages should simply use get/post/postForm/del;
- * session creation is automatic.
- */
 export {
   ensureSession,
   clearSession,

@@ -11,7 +11,7 @@
  * - Backend error normalization
  *
  * Security model:
- * - Session credentials are stored only in sessionStorage.
+ * - Anonymous session token is stored only in localStorage.
  * - Gemini/Tavily keys are stored only in sessionStorage.
  * - Provider keys are sent only when explicitly required by an API call.
  * - Provider keys are never stored by the backend.
@@ -107,7 +107,52 @@ const ERROR_MESSAGES = {
 
 
 /**
+ * Safely read from localStorage.
+ *
+ * Used for the persistent anonymous BodhaQ session token.
+ */
+function readLocalStorage(key) {
+  try {
+    return localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+
+/**
+ * Safely write to localStorage.
+ *
+ * Used for the persistent anonymous BodhaQ session token.
+ */
+function writeLocalStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+/**
+ * Safely remove from localStorage.
+ *
+ * Used for the persistent anonymous BodhaQ session token.
+ */
+function removeLocalStorage(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
+
+/**
  * Safely read from sessionStorage.
+ *
+ * Used for temporary provider API keys.
  */
 function readSessionStorage(key) {
   try {
@@ -120,6 +165,8 @@ function readSessionStorage(key) {
 
 /**
  * Safely write to sessionStorage.
+ *
+ * Used for temporary provider API keys.
  */
 function writeSessionStorage(key, value) {
   try {
@@ -133,6 +180,8 @@ function writeSessionStorage(key, value) {
 
 /**
  * Safely remove from sessionStorage.
+ *
+ * Used for temporary provider API keys.
  */
 function removeSessionStorage(key) {
   try {
@@ -181,7 +230,7 @@ function buildAuthenticatedHeaders({
     }
     : buildHeaders();
 
-  const sessionToken = readSessionStorage(
+  const sessionToken = readLocalStorage(
     SESSION_STORAGE_KEY
   );
 
@@ -490,7 +539,7 @@ async function createSession() {
     throw err;
   }
 
-  const stored = writeSessionStorage(
+  const stored = writeLocalStorage(
     SESSION_STORAGE_KEY,
     data.session_token
   );
@@ -520,7 +569,7 @@ let sessionPromise = null;
  * Ensure that an anonymous session exists.
  */
 async function ensureSession() {
-  const existingToken = readSessionStorage(
+  const existingToken = readLocalStorage(
     SESSION_STORAGE_KEY
   );
 
@@ -542,7 +591,7 @@ async function ensureSession() {
  * Clear the current anonymous session.
  */
 function clearSession() {
-  removeSessionStorage(
+  removeLocalStorage(
     SESSION_STORAGE_KEY
   );
 }
@@ -840,7 +889,6 @@ export {
   ensureSession,
   clearSession,
 };
-
 
 export default {
   get,

@@ -1888,51 +1888,47 @@ export default function WeakTopicsPage() {
   );
 
   // Practice countdown timer.
+  // Keep one interval running for the quiz instead of recreating
+  // the interval every time practiceSecondsLeft changes.
   useEffect(() => {
-    clearInterval(
-      practiceTimerRef.current
-    );
-
     if (
       practicePhase !== 'quiz' ||
       practiceSecondsLeft === null ||
       practiceSubmitting
     ) {
+      if (practiceTimerRef.current) {
+        clearInterval(practiceTimerRef.current);
+        practiceTimerRef.current = null;
+      }
+
       return undefined;
     }
 
-    if (
-      Number(practiceSecondsLeft) <=
-      0
-    ) {
+    if (Number(practiceSecondsLeft) <= 0) {
       submitPractice();
       return undefined;
     }
 
-    practiceTimerRef.current =
-      setInterval(() => {
-        setPracticeSecondsLeft(
-          (previous) => {
-            if (
-              previous === null ||
-              previous <= 1
-            ) {
-              return 0;
-            }
+    practiceTimerRef.current = setInterval(() => {
+      setPracticeSecondsLeft((previous) => {
+        const current = Number(previous);
 
-            return previous - 1;
-          }
-        );
-      }, 1000);
+        if (!Number.isFinite(current) || current <= 1) {
+          return 0;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
 
     return () => {
-      clearInterval(
-        practiceTimerRef.current
-      );
+      if (practiceTimerRef.current) {
+        clearInterval(practiceTimerRef.current);
+        practiceTimerRef.current = null;
+      }
     };
   }, [
     practicePhase,
-    practiceSecondsLeft,
     practiceSubmitting,
     submitPractice,
   ]);
@@ -1952,7 +1948,6 @@ export default function WeakTopicsPage() {
     practiceSubmitting,
     submitPractice,
   ]);
-
   // Concept explanation modal.
   async function handleExplain(item) {
     if (!item?.topic) {

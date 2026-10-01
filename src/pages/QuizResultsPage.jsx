@@ -69,6 +69,215 @@ function ScoreRing({ percentage }) {
   );
 }
 
+// Resolve option text from the various answer representations that may
+// be returned by the quiz/evaluation flow.
+function getOptionText(mistake, answerKey, explicitTextKey) {
+  if (!mistake) return '';
+
+  // Prefer an explicit answer-text field when available.
+  const explicitText = mistake[explicitTextKey];
+
+  if (
+    typeof explicitText === 'string' &&
+    explicitText.trim()
+  ) {
+    return explicitText.trim();
+  }
+
+  const answer = mistake[answerKey];
+
+  if (
+    answer === null ||
+    answer === undefined ||
+    answer === ''
+  ) {
+    return '';
+  }
+
+  // If the answer itself is already an object, support common shapes.
+  if (typeof answer === 'object') {
+    const objectText =
+      answer.text ??
+      answer.label ??
+      answer.value ??
+      answer.option ??
+      answer.answer;
+
+    if (
+      typeof objectText === 'string' &&
+      objectText.trim()
+    ) {
+      return objectText.trim();
+    }
+  }
+
+  // Find the answer text inside the question's options/choices.
+  const options =
+    mistake.options ??
+    mistake.choices ??
+    mistake.answer_options ??
+    mistake.answers;
+
+  if (Array.isArray(options)) {
+    const normalizedAnswer = String(answer)
+      .trim()
+      .toUpperCase();
+
+    const matchedOption = options.find((option, index) => {
+      if (option === null || option === undefined) {
+        return false;
+      }
+
+      if (typeof option === 'string') {
+        // Supports:
+        // ["update", "insert", "select", "delete"]
+        // and:
+        // ["A. update", "B. insert", ...]
+        const optionText = option.trim();
+
+        const letter = String.fromCharCode(
+          65 + index
+        );
+
+        return (
+          normalizedAnswer === letter ||
+          normalizedAnswer === optionText.toUpperCase() ||
+          normalizedAnswer === optionText
+            .replace(/^[A-Z][.)]\s*/i, '')
+            .trim()
+            .toUpperCase()
+        );
+      }
+
+      if (typeof option === 'object') {
+        const optionKey =
+          option.id ??
+          option.key ??
+          option.label ??
+          option.option ??
+          String.fromCharCode(65 + index);
+
+        const optionValue =
+          option.text ??
+          option.value ??
+          option.answer ??
+          option.content ??
+          option.label;
+
+        return (
+          normalizedAnswer === String(optionKey)
+            .trim()
+            .toUpperCase() ||
+          (
+            typeof optionValue === 'string' &&
+            normalizedAnswer === optionValue
+              .trim()
+              .toUpperCase()
+          )
+        );
+      }
+
+      return false;
+    });
+
+    if (matchedOption !== undefined) {
+      if (typeof matchedOption === 'string') {
+        return matchedOption
+          .replace(/^[A-Z][.)]\s*/i, '')
+          .trim();
+      }
+
+      if (typeof matchedOption === 'object') {
+        const matchedText =
+          matchedOption.text ??
+          matchedOption.value ??
+          matchedOption.answer ??
+          matchedOption.content ??
+          matchedOption.label;
+
+        if (
+          typeof matchedText === 'string' &&
+          matchedText.trim()
+        ) {
+          return matchedText.trim();
+        }
+      }
+    }
+  }
+
+  // Support options represented as an object:
+  //
+  // {
+  //   A: "update",
+  //   B: "insert",
+  //   C: "select",
+  //   D: "delete"
+  // }
+  if (
+    options &&
+    typeof options === 'object' &&
+    !Array.isArray(options)
+  ) {
+    const normalizedAnswer = String(answer)
+      .trim()
+      .toUpperCase();
+
+    const optionValue =
+      options[answer] ??
+      options[normalizedAnswer] ??
+      options[
+      normalizedAnswer.toLowerCase()
+      ];
+
+    if (typeof optionValue === 'string') {
+      return optionValue.trim();
+    }
+
+    if (
+      optionValue &&
+      typeof optionValue === 'object'
+    ) {
+      const objectText =
+        optionValue.text ??
+        optionValue.value ??
+        optionValue.answer ??
+        optionValue.content ??
+        optionValue.label;
+
+      if (
+        typeof objectText === 'string' &&
+        objectText.trim()
+      ) {
+        return objectText.trim();
+      }
+    }
+  }
+
+  return '';
+}
+
+// Format an answer as:
+//
+// D — delete
+//
+// If the option text is unavailable, it safely falls back to:
+//
+// D
+function formatAnswer(answer, answerText, fallback) {
+  const answerValue =
+    answer === null ||
+      answer === undefined ||
+      answer === ''
+      ? fallback
+      : String(answer);
+
+  if (!answerText) {
+    return answerValue;
+  }
+
+  return `${answerValue} — ${answerText}`;
+}
+
 // Explanation button (inline toggle)
 function ExplanationButton({ explanation, id }) {
   const [open, setOpen] = useState(false);
@@ -123,6 +332,30 @@ function ExplanationButton({ explanation, id }) {
 function MistakeCard({ mistake, index }) {
   if (!mistake) return null;
 
+  const userAnswerText = getOptionText(
+    mistake,
+    'user_answer',
+    'user_answer_text'
+  );
+
+  const correctAnswerText = getOptionText(
+    mistake,
+    'correct_answer',
+    'correct_answer_text'
+  );
+
+  const formattedUserAnswer = formatAnswer(
+    mistake.user_answer,
+    userAnswerText,
+    'No answer'
+  );
+
+  const formattedCorrectAnswer = formatAnswer(
+    mistake.correct_answer,
+    correctAnswerText,
+    'Unavailable'
+  );
+
   return (
     <Card
       style={{
@@ -169,6 +402,7 @@ function MistakeCard({ mistake, index }) {
             display: 'flex',
             gap: 8,
             alignItems: 'center',
+            flexWrap: 'wrap',
           }}
         >
           <span
@@ -187,7 +421,7 @@ function MistakeCard({ mistake, index }) {
               fontSize: 'var(--font-size-sm)',
             }}
           >
-            {mistake.user_answer ?? 'No answer'}
+            {formattedUserAnswer}
           </span>
         </div>
 
@@ -199,6 +433,7 @@ function MistakeCard({ mistake, index }) {
             display: 'flex',
             gap: 8,
             alignItems: 'center',
+            flexWrap: 'wrap',
           }}
         >
           <span
@@ -217,7 +452,7 @@ function MistakeCard({ mistake, index }) {
               fontSize: 'var(--font-size-sm)',
             }}
           >
-            {mistake.correct_answer ?? 'Unavailable'}
+            {formattedCorrectAnswer}
           </span>
         </div>
       </div>

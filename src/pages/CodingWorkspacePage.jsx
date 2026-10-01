@@ -33,8 +33,10 @@ function normalizeSourceMode(value) {
 
 
 function normalizeSavedCodeId(value) {
-  return typeof value === 'string' &&
+  return (
+    typeof value === 'string' &&
     value.trim()
+  )
     ? value.trim()
     : null;
 }
@@ -186,8 +188,13 @@ export default function CodingWorkspacePage() {
     /*
      * Existing workspaces open directly in
      * CodingWorkspace.
+     *
+     * Clear any previously generated/restored
+     * problem so stale problem data cannot leak
+     * into another saved/existing workspace.
      */
     setShowInput(false);
+    setProblemData(null);
 
   }, [
     routerState.sourceMode,

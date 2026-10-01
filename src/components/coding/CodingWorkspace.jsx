@@ -14,11 +14,13 @@ import {
 } from '../../utils/codingStorage';
 import {
   executeCode,
+  generateCodingProblem,
   analyzeCode,
   improveCode,
   generateTestCases,
   submitCode,
 } from '../../api/codingApi';
+
 import './CodingWorkspace.css';
 
 
@@ -307,9 +309,6 @@ export default function CodingWorkspace({
     });
 
 
-  /*
-   * Clean up the action-message timer.
-   */
   useEffect(() => {
     return () => {
       if (actionMessageTimeoutRef.current) {
@@ -321,9 +320,6 @@ export default function CodingWorkspace({
   }, []);
 
 
-  /*
-   * Persist the current results-panel height.
-   */
   const persistResultsHeight = useCallback(
     (height) => {
       try {
@@ -414,10 +410,6 @@ export default function CodingWorkspace({
   ]);
 
 
-  /*
-   * Keep the stored results-panel height valid
-   * when the viewport changes.
-   */
   useEffect(() => {
     const handleResize = () => {
       setResultsHeight((currentHeight) => {
@@ -448,9 +440,6 @@ export default function CodingWorkspace({
   }, [persistResultsHeight]);
 
 
-  /*
-   * Detect application theme changes.
-   */
   useEffect(() => {
     if (typeof document === 'undefined') {
       return undefined;
@@ -482,9 +471,6 @@ export default function CodingWorkspace({
   }, []);
 
 
-  /*
-   * Load a saved workspace/problem.
-   */
   useEffect(() => {
     let cancelled = false;
 
@@ -513,13 +499,6 @@ export default function CodingWorkspace({
         const savedCode =
           normalizeString(codeItem.code);
 
-        /*
-         * Restore the complete saved workspace.
-         *
-         * AI Learn saves the problem context together with
-         * the code. IDE saves intentionally contain no problem
-         * context, so the sourceMode decides which UI is shown.
-         */
         setWorkspaceState(
           (prevState) => ({
             ...prevState,
@@ -934,31 +913,6 @@ export default function CodingWorkspace({
 
   const handleSave = () => {
     try {
-      /*
-       * Save the complete workspace state.
-       *
-       * AI Learn:
-       * - problem name
-       * - problem statement
-       * - input/output format
-       * - constraints
-       * - examples
-       * - sample
-       * - public tests
-       * - hidden test count
-       * - difficulty
-       * - topics
-       * - problem ID
-       * - Java/Python code
-       *
-       * IDE:
-       * - sourceMode
-       * - language
-       * - code
-       * - Java/Python code
-       *
-       * The storage layer preserves every field supplied here.
-       */
       const savedWorkspace = {
         id:
           workspaceState.id,
@@ -987,11 +941,6 @@ export default function CodingWorkspace({
             : 'ide',
       };
 
-      /*
-       * Only AI Learn workspaces persist problem context.
-       * This prevents an IDE save from accidentally becoming
-       * an AI Learn workspace when it is reopened later.
-       */
       if (
         workspaceState.sourceMode === 'ai-learn'
       ) {
@@ -1061,11 +1010,6 @@ export default function CodingWorkspace({
         savedWorkspace
       );
 
-      /*
-       * Keep the current workspace synchronized as well.
-       * This is useful when the user continues editing after
-       * saving and later returns to the coding workspace.
-       */
       saveCurrentWorkspace(
         workspaceState
       );
@@ -1341,21 +1285,143 @@ export default function CodingWorkspace({
           );
         }
 
-
         else if (
           actionType === 'testcases'
         ) {
-          if (!workspaceState.problemId) {
+          let activeProblemId =
+            workspaceState.problemId;
+
+          if (!activeProblemId) {
             setAiAnalysisResult(
-              'Cannot generate test cases without an active problem ID.'
+              'Preparing a verified problem context before generating test cases...'
             );
 
-            return;
+            const problemResult =
+              await generateCodingProblem(
+                workspaceState.title,
+                problemStatement,
+                constraints,
+                sample
+              );
+
+            activeProblemId =
+              problemResult?.problem_id || null;
+
+            if (!activeProblemId) {
+              throw new Error(
+                'The backend did not return a problem ID for the verified problem.'
+              );
+            }
+
+            const generatedExamples =
+              normalizeArray(
+                problemResult?.examples
+              );
+
+            const generatedPublicTests =
+              normalizeArray(
+                problemResult?.public_tests
+              );
+
+            const generatedHiddenCount =
+              Number.isInteger(
+                problemResult?.hidden_test_count
+              )
+                ? problemResult.hidden_test_count
+                : 0;
+
+            setWorkspaceState((prev) => {
+              const newState = {
+                ...prev,
+                problemId: activeProblemId,
+
+                title:
+                  normalizeString(
+                    problemResult?.title
+                  ).trim() ||
+                  prev.title,
+
+                problemStatement:
+                  normalizeString(
+                    problemResult?.statement
+                  ).trim() ||
+                  prev.problemStatement,
+
+                inputFormat:
+                  normalizeString(
+                    problemResult?.input_format
+                  ).trim() ||
+                  prev.inputFormat,
+
+                outputFormat:
+                  normalizeString(
+                    problemResult?.output_format
+                  ).trim() ||
+                  prev.outputFormat,
+
+                constraints:
+                  normalizeString(
+                    problemResult?.constraints
+                  ).trim() ||
+                  prev.constraints,
+
+                examples:
+                  generatedExamples.length > 0
+                    ? generatedExamples
+                    : normalizeArray(
+                      prev.examples
+                    ),
+
+                publicTests: [
+                  ...normalizeArray(
+                    prev.publicTests
+                  ),
+                  ...generatedPublicTests,
+                ],
+
+                hiddenTestCount:
+                  (
+                    Number.isInteger(
+                      prev.hiddenTestCount
+                    )
+                      ? prev.hiddenTestCount
+                      : 0
+                  ) +
+                  generatedHiddenCount,
+
+                difficulty:
+                  normalizeString(
+                    problemResult?.difficulty
+                  ).trim() ||
+                  prev.difficulty,
+
+                topics:
+                  normalizeArray(
+                    problemResult?.topics
+                  ).length > 0
+                    ? normalizeArray(
+                      problemResult?.topics
+                    )
+                    : normalizeArray(
+                      prev.topics
+                    ),
+              };
+
+              saveCurrentWorkspace(
+                newState
+              );
+
+              return newState;
+            });
           }
+
+          setAiAnalysisResult(
+            'Generating additional verified test cases...'
+          );
 
           const result =
             await generateTestCases(
-              workspaceState.problemId,
+              activeProblemId,
               problemStatement,
               sample,
               constraints,
@@ -1379,6 +1445,9 @@ export default function CodingWorkspace({
             (prev) => {
               const newState = {
                 ...prev,
+
+                problemId:
+                  activeProblemId,
 
                 publicTests: [
                   ...normalizeArray(
@@ -1410,7 +1479,6 @@ export default function CodingWorkspace({
             `Generated ${newPublicTests.length} public tests and ${newHiddenCount} hidden tests successfully. They have been added to your workspace evaluation suite.`
           );
         }
-
 
         else if (
           actionType === 'improve'
@@ -1535,6 +1603,15 @@ export default function CodingWorkspace({
     Boolean(
       workspaceState.problemStatement.trim() &&
       workspaceState.sample.trim()
+    );
+
+  const hasGeneratedTestSuite =
+    Boolean(
+      workspaceState.problemId &&
+      (
+        workspaceState.publicTests.length > 0 ||
+        workspaceState.hiddenTestCount > 0
+      )
     );
 
 
@@ -1746,7 +1823,8 @@ export default function CodingWorkspace({
                         alignItems:
                           'center',
                         marginTop: '16px',
-                        marginBottom: '12px',
+                        marginBottom:
+                          '12px',
                       }}
                     >
                       <h4
@@ -2253,30 +2331,29 @@ export default function CodingWorkspace({
               }}
             >
               {workspaceState.sourceMode !== 'ide' && (
-                <>
-                  <Button
-                    variant="secondary"
-                    onClick={handleRunSamples}
-                    loading={isRunning}
-                    disabled={isSubmitting}
-                    aria-label="Run sample test cases"
-                    title="Run sample test cases"
-                  >
-                    {isRunning ? 'Running...' : 'Run'}
-                  </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleRunSamples}
+                  loading={isRunning}
+                  disabled={isSubmitting}
+                  aria-label="Run sample test cases"
+                  title="Run sample test cases"
+                >
+                  {isRunning ? 'Running...' : 'Run'}
+                </Button>
+              )}
 
-                  <Button
-                    variant="success"
-                    onClick={() => handleRunSuite('all')}
-                    loading={isSubmitting}
-                    disabled={
-                      isRunning || !workspaceState.problemId
-                    }
-                    title="Submit code for evaluation"
-                  >
-                    {isSubmitting ? 'Evaluating...' : 'Submit'}
-                  </Button>
-                </>
+              {hasGeneratedTestSuite && (
+                <Button
+                  variant="success"
+                  onClick={() => handleRunSuite('all')}
+                  loading={isSubmitting}
+                  disabled={isRunning || isSubmitting}
+                  aria-label="Submit code for evaluation"
+                  title="Submit code for evaluation"
+                >
+                  {isSubmitting ? 'Evaluating...' : 'Submit'}
+                </Button>
               )}
             </div>
           </div>
@@ -3364,198 +3441,196 @@ export default function CodingWorkspace({
             </div>
 
 
-            {workspaceState.sourceMode ===
-              'ide' &&
-              !workspaceState.problemStatement && (
+            {!hasAiContext && (
+              <div
+                style={{
+                  marginBottom:
+                    '24px',
+                }}
+              >
+                <p>
+                  Please provide
+                  problem context to
+                  analyze your code
+                  effectively.
+                </p>
+
                 <div
+                  className="form-group"
                   style={{
                     marginBottom:
-                      '24px',
+                      '12px',
                   }}
                 >
-                  <p>
-                    Please provide
-                    problem context to
-                    analyze your code
-                    effectively.
-                  </p>
-
-                  <div
-                    className="form-group"
+                  <label
+                    htmlFor="ai-problem-statement"
                     style={{
+                      display:
+                        'block',
                       marginBottom:
-                        '12px',
+                        '4px',
+                      fontWeight:
+                        'bold',
                     }}
                   >
-                    <label
-                      htmlFor="ai-problem-statement"
-                      style={{
-                        display:
-                          'block',
-                        marginBottom:
-                          '4px',
-                        fontWeight:
-                          'bold',
-                      }}
-                    >
-                      Problem Statement
-                      (Required)
-                    </label>
+                    Problem Statement
+                    (Required)
+                  </label>
 
-                    <textarea
-                      id="ai-problem-statement"
-                      value={
-                        workspaceState.problemStatement
-                      }
-                      onChange={(e) =>
-                        setWorkspaceState(
-                          (prev) => ({
-                            ...prev,
-                            problemStatement:
-                              e.target.value,
-                          })
-                        )
-                      }
-                      placeholder="Describe the problem..."
-                      rows={4}
-                      disabled={
-                        isAnalyzing
-                      }
-                      style={{
-                        width:
-                          '100%',
-                        padding:
-                          '8px',
-                        border:
-                          '1px solid var(--color-border)',
-                        borderRadius:
-                          '4px',
-                        background:
-                          'var(--color-surface)',
-                        color:
-                          'var(--color-text)',
-                      }}
-                    />
-                  </div>
-
-
-                  <div
-                    className="form-group"
+                  <textarea
+                    id="ai-problem-statement"
+                    value={
+                      workspaceState.problemStatement
+                    }
+                    onChange={(e) =>
+                      setWorkspaceState(
+                        (prev) => ({
+                          ...prev,
+                          problemStatement:
+                            e.target.value,
+                        })
+                      )
+                    }
+                    placeholder="Describe the problem..."
+                    rows={4}
+                    disabled={
+                      isAnalyzing
+                    }
                     style={{
-                      marginBottom:
-                        '12px',
+                      width:
+                        '100%',
+                      padding:
+                        '8px',
+                      border:
+                        '1px solid var(--color-border)',
+                      borderRadius:
+                        '4px',
+                      background:
+                        'var(--color-surface)',
+                      color:
+                        'var(--color-text)',
                     }}
-                  >
-                    <label
-                      htmlFor="ai-sample-test"
-                      style={{
-                        display:
-                          'block',
-                        marginBottom:
-                          '4px',
-                        fontWeight:
-                          'bold',
-                      }}
-                    >
-                      Sample Test Case
-                      (Required)
-                    </label>
-
-                    <textarea
-                      id="ai-sample-test"
-                      value={
-                        workspaceState.sample
-                      }
-                      onChange={(e) =>
-                        setWorkspaceState(
-                          (prev) => ({
-                            ...prev,
-                            sample:
-                              e.target.value,
-                          })
-                        )
-                      }
-                      placeholder="Input: ... Output: ..."
-                      rows={2}
-                      disabled={
-                        isAnalyzing
-                      }
-                      style={{
-                        width:
-                          '100%',
-                        padding:
-                          '8px',
-                        border:
-                          '1px solid var(--color-border)',
-                        borderRadius:
-                          '4px',
-                        background:
-                          'var(--color-surface)',
-                        color:
-                          'var(--color-text)',
-                      }}
-                    />
-                  </div>
-
-
-                  <div
-                    className="form-group"
-                    style={{
-                      marginBottom:
-                        '16px',
-                    }}
-                  >
-                    <label
-                      htmlFor="ai-constraints"
-                      style={{
-                        display:
-                          'block',
-                        marginBottom:
-                          '4px',
-                        fontWeight:
-                          'bold',
-                      }}
-                    >
-                      Constraints (Optional)
-                    </label>
-
-                    <input
-                      id="ai-constraints"
-                      type="text"
-                      value={
-                        workspaceState.constraints
-                      }
-                      onChange={(e) =>
-                        setWorkspaceState(
-                          (prev) => ({
-                            ...prev,
-                            constraints:
-                              e.target.value,
-                          })
-                        )
-                      }
-                      placeholder="e.g. 1 <= N <= 10^5"
-                      disabled={
-                        isAnalyzing
-                      }
-                      style={{
-                        width:
-                          '100%',
-                        padding:
-                          '8px',
-                        border:
-                          '1px solid var(--color-border)',
-                        borderRadius:
-                          '4px',
-                        background:
-                          'var(--color-surface)',
-                        color:
-                          'var(--color-text)',
-                      }}
-                    />
-                  </div>
+                  />
                 </div>
-              )}
+
+
+                <div
+                  className="form-group"
+                  style={{
+                    marginBottom:
+                      '12px',
+                  }}
+                >
+                  <label
+                    htmlFor="ai-sample-test"
+                    style={{
+                      display:
+                        'block',
+                      marginBottom:
+                        '4px',
+                      fontWeight:
+                        'bold',
+                    }}
+                  >
+                    Sample Test Case
+                    (Required)
+                  </label>
+
+                  <textarea
+                    id="ai-sample-test"
+                    value={
+                      workspaceState.sample
+                    }
+                    onChange={(e) =>
+                      setWorkspaceState(
+                        (prev) => ({
+                          ...prev,
+                          sample:
+                            e.target.value,
+                        })
+                      )
+                    }
+                    placeholder="Input: ... Output: ..."
+                    rows={2}
+                    disabled={
+                      isAnalyzing
+                    }
+                    style={{
+                      width:
+                        '100%',
+                      padding:
+                        '8px',
+                      border:
+                        '1px solid var(--color-border)',
+                      borderRadius:
+                        '4px',
+                      background:
+                        'var(--color-surface)',
+                      color:
+                        'var(--color-text)',
+                    }}
+                  />
+                </div>
+
+
+                <div
+                  className="form-group"
+                  style={{
+                    marginBottom:
+                      '16px',
+                  }}
+                >
+                  <label
+                    htmlFor="ai-constraints"
+                    style={{
+                      display:
+                        'block',
+                      marginBottom:
+                        '4px',
+                      fontWeight:
+                        'bold',
+                    }}
+                  >
+                    Constraints (Optional)
+                  </label>
+
+                  <input
+                    id="ai-constraints"
+                    type="text"
+                    value={
+                      workspaceState.constraints
+                    }
+                    onChange={(e) =>
+                      setWorkspaceState(
+                        (prev) => ({
+                          ...prev,
+                          constraints:
+                            e.target.value,
+                        })
+                      )
+                    }
+                    placeholder="e.g. 1 <= N <= 10^5"
+                    disabled={
+                      isAnalyzing
+                    }
+                    style={{
+                      width:
+                        '100%',
+                      padding:
+                        '8px',
+                      border:
+                        '1px solid var(--color-border)',
+                      borderRadius:
+                        '4px',
+                      background:
+                        'var(--color-surface)',
+                      color:
+                        'var(--color-text)',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
 
             <div
@@ -3612,8 +3687,7 @@ export default function CodingWorkspace({
                 }
                 disabled={
                   isAnalyzing ||
-                  !hasAiContext ||
-                  !workspaceState.problemId
+                  !hasAiContext
                 }
                 style={{
                   flex: 1,
